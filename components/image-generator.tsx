@@ -36,6 +36,17 @@ export function ImageGenerator() {
   }
 
   useEffect(() => {
+    const storedPrompt = sessionStorage.getItem("nb_pending_prompt")
+    const storedImage = sessionStorage.getItem("nb_pending_image")
+    if (storedPrompt) {
+      setPrompt(storedPrompt)
+      sessionStorage.removeItem("nb_pending_prompt")
+    }
+    if (storedImage) {
+      setUploadedImagePreviewUrl(storedImage)
+      sessionStorage.removeItem("nb_pending_image")
+    }
+
     return () => {
       clearProgressInterval()
     }
@@ -75,9 +86,10 @@ export function ImageGenerator() {
     setProgress(0)
     let current = 0
     progressIntervalRef.current = window.setInterval(() => {
-      current = Math.min(95, current + Math.max(1, Math.round((100 - current) * 0.06)))
+      const easedIncrement = Math.max(1, Math.round((99 - current) * 0.06))
+      current = Math.min(99, current + easedIncrement)
       setProgress(current)
-    }, 250)
+    }, 200)
   }
 
   const generate = async () => {
@@ -88,6 +100,29 @@ export function ImageGenerator() {
     }
 
     setError(null)
+
+    const nextUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+
+    // Pre-check auth to avoid hitting the generate endpoint when logged out.
+    const authRes = await fetch("/api/auth/status", { cache: "no-store" })
+    if (authRes.status === 401) {
+      try {
+        sessionStorage.setItem("nb_pending_prompt", prompt)
+        if (uploadedImagePreviewUrl) {
+          sessionStorage.setItem("nb_pending_image", uploadedImagePreviewUrl)
+        }
+      } catch (err) {
+        console.error("Failed to persist pending data before login", err)
+      }
+      window.location.assign(`/login?next=${encodeURIComponent(nextUrl)}`)
+      return
+    }
+
+    if (!authRes.ok) {
+      setError("Unable to verify login. Please try again.")
+      return
+    }
+
     setIsGenerating(true)
     startFakeProgress()
 
@@ -106,6 +141,19 @@ export function ImageGenerator() {
       const data = (await res.json().catch(() => null)) as
         | { imageUrl?: string; error?: string }
         | null
+
+      if (res.status === 401) {
+        try {
+          sessionStorage.setItem("nb_pending_prompt", prompt)
+          if (uploadedImagePreviewUrl) {
+            sessionStorage.setItem("nb_pending_image", uploadedImagePreviewUrl)
+          }
+        } catch (err) {
+          console.error("Failed to persist pending data before login", err)
+        }
+        window.location.assign(`/login?next=${encodeURIComponent(nextUrl)}`)
+        return
+      }
 
       if (!res.ok) {
         setError(data?.error || `Request failed (${res.status}).`)

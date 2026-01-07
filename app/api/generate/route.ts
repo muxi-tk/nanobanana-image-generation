@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 const MODEL = "google/gemini-2.5-flash-image"
@@ -24,6 +25,16 @@ function byteLengthFromDataUrl(dataUrl: string) {
 }
 
 export async function POST(request: Request) {
+  const supabase = await createClient()
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  if (authError) {
+    console.error("Auth check failed", authError)
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 })
+  }
+  if (!authData?.user) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 })
+  }
+
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) {
     return NextResponse.json(

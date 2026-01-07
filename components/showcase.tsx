@@ -46,6 +46,7 @@ export function Showcase() {
                   src={item.image || "/placeholder.svg"}
                   alt={item.title}
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
+                  suppressHydrationWarning
                 />
                 <div className="absolute top-4 left-4 bg-primary/90 text-primary-foreground px-3 py-1 rounded-full text-xs font-medium">
                   Nano Banana Speed
