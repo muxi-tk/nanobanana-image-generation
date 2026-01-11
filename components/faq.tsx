@@ -1,30 +1,35 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { siteConfig } from "@/lib/site"
 
 const faqs = [
   {
     question: "What is Nano Banana?",
     answer:
-      "It's a revolutionary AI image editing model that transforms photos using natural language prompts. This is currently one of the most powerful image editing models available, with exceptional consistency. It offers superior performance for consistent character editing and scene preservation.",
+      "Nano Banana is an AI image editor that applies text prompts to transform images. It focuses on consistent edits and fast iterations for common creative workflows.",
   },
   {
     question: "How does it work?",
     answer:
-      'Simply upload an image and describe your desired edits in natural language. The AI understands complex instructions like "place the creature in a snowy mountain" or "imagine the whole face and create it". It processes your text prompt and generates perfectly edited images.',
+      'Upload an image, describe the edit in plain language, and the system generates a revised image based on your prompt. Results can vary by input and prompt detail.',
   },
   {
     question: "What makes Nano Banana special?",
     answer:
-      "This model excels in character consistency, scene blending, and one-shot editing. Users report it preserves facial features and seamlessly integrates edits with backgrounds. It also supports multi-image context, making it ideal for creating consistent AI influencers.",
+      "It is optimized for character consistency, scene edits, and multi-image context so teams can iterate quickly with fewer manual steps.",
   },
   {
     question: "Can I use it for commercial projects?",
     answer:
-      "Yes! It's perfect for creating AI UGC content, social media campaigns, and marketing materials. Many users leverage it for creating consistent AI influencers and product photography. The high-quality outputs are suitable for professional use.",
+      "You can use your outputs commercially as long as you have rights to the source assets and comply with our terms.",
   },
   {
     question: "What types of edits can it handle?",
     answer:
-      'The editor handles complex edits including face completion, background changes, object placement, style transfers, and character modifications. It excels at understanding contextual instructions like "place in a blizzard" or "create the whole face" while maintaining photorealistic quality.',
+      "Common edits include background changes, object placement, style transfers, and character adjustments. Some prompts may require multiple iterations.",
+  },
+  {
+    question: "How do I contact support?",
+    answer: `Email us at ${siteConfig.supportEmail || "support@yourdomain.com"} and we will get back to you quickly.`,
   },
 ]
 
@@ -38,10 +43,14 @@ export function FAQ() {
             <p className="text-lg text-muted-foreground text-balance">Frequently Asked Questions</p>
           </div>
 
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible className="w-full space-y-2">
             {faqs.map((faq, index) => (
-              <AccordionItem key={index} value={`item-${index}`}>
-                <AccordionTrigger className="text-left">{faq.question}</AccordionTrigger>
+              <AccordionItem
+                key={index}
+                value={`item-${index}`}
+                className="border border-border/50 rounded-lg px-3 bg-background/60 last:border-b"
+              >
+                <AccordionTrigger className="text-left text-base font-semibold">{faq.question}</AccordionTrigger>
                 <AccordionContent className="text-muted-foreground leading-relaxed">{faq.answer}</AccordionContent>
               </AccordionItem>
             ))}

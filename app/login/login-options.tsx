@@ -2,8 +2,6 @@
 
 import { signInWithGoogle } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import type { SVGProps } from "react"
 
 function GoogleIcon(props: SVGProps<SVGSVGElement>) {
@@ -45,18 +43,6 @@ export function LoginOptions({ nextUrl }: { nextUrl?: string }) {
         </Button>
       </form>
 
-      <div className="flex items-center gap-4">
-        <Separator className="flex-1" />
-        <span className="text-xs text-muted-foreground">or</span>
-        <Separator className="flex-1" />
-      </div>
-
-      <div className="space-y-3">
-        <Input placeholder="Enter email address" disabled />
-        <Button className="w-full rounded-full h-11" disabled>
-          Continue
-        </Button>
-      </div>
     </div>
   )
 }

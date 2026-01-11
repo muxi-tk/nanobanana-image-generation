@@ -2,7 +2,11 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-const MODEL = "google/gemini-2.5-flash-image"
+const MODEL_MAP: Record<string, string> = {
+  "nano-banana": "google/gemini-2.5-flash-image",
+  "nano-banana-pro": "google/gemini-3-pro-image-preview",
+  "seedream-4-5": "bytedance-seed/seedream-4.5",
+}
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const OPENROUTER_TIMEOUT_MS = 120_000
 
@@ -46,15 +50,58 @@ export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") || ""
   let prompt = ""
   let imageDataUrl: string | null = null
+  let imageDataUrls: string[] = []
+  let selectedModel = "nano-banana"
+  let aspectRatio = "auto"
+  let imageCount = 1
+  let resolution = "1k"
+  let outputFormat = "png"
+  let generationMode = "image-edit"
 
   if (contentType.includes("application/json")) {
     const body = (await request.json().catch(() => null)) as
-      | { prompt?: unknown; imageDataUrl?: unknown }
+      | {
+          prompt?: unknown
+          imageDataUrl?: unknown
+          imageDataUrls?: unknown
+          model?: unknown
+          aspectRatio?: unknown
+          imageCount?: unknown
+          resolution?: unknown
+          outputFormat?: unknown
+          generationMode?: unknown
+        }
       | null
 
     prompt = String(body?.prompt ?? "").trim()
     const maybeDataUrl = typeof body?.imageDataUrl === "string" ? body.imageDataUrl.trim() : ""
     imageDataUrl = maybeDataUrl ? maybeDataUrl : null
+    if (Array.isArray(body?.imageDataUrls)) {
+      imageDataUrls = body.imageDataUrls.filter((value): value is string => typeof value === "string" && value.trim())
+    }
+    if (typeof body?.model === "string") {
+      selectedModel = body.model
+    }
+    if (typeof body?.aspectRatio === "string") {
+      aspectRatio = body.aspectRatio
+    }
+    if (typeof body?.resolution === "string") {
+      resolution = body.resolution
+    }
+    if (typeof body?.outputFormat === "string") {
+      outputFormat = body.outputFormat
+    }
+    if (typeof body?.generationMode === "string") {
+      generationMode = body.generationMode
+    }
+    if (typeof body?.imageCount === "string") {
+      const parsed = Number.parseInt(body.imageCount, 10)
+      if (!Number.isNaN(parsed)) {
+        imageCount = parsed
+      }
+    } else if (typeof body?.imageCount === "number" && Number.isFinite(body.imageCount)) {
+      imageCount = Math.max(1, Math.floor(body.imageCount))
+    }
   } else {
     // Back-compat: older clients may still submit multipart/form-data.
     const formData = await request.formData()
@@ -80,25 +127,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Prompt is required." }, { status: 400 })
   }
 
+  if (generationMode === "text-to-image") {
+    imageDataUrl = null
+    imageDataUrls = []
+  }
+
+  const settings: string[] = []
+  if (aspectRatio && aspectRatio !== "auto") {
+    settings.push(`Aspect ratio: ${aspectRatio}`)
+  }
+  if (resolution && resolution !== "1k") {
+    settings.push(`Resolution: ${resolution.toUpperCase()}`)
+  }
+  if (outputFormat && outputFormat !== "png") {
+    settings.push(`Output format: ${outputFormat.toUpperCase()}`)
+  }
+  if (imageCount > 1) {
+    settings.push(`Number of images: ${imageCount}`)
+  }
+
+  const finalPrompt = settings.length ? `${prompt}\n\n${settings.join(". ")}` : prompt
+
   const contentParts: Array<
     | { type: "text"; text: string }
     | { type: "image_url"; image_url: { url: string } }
-  > = [{ type: "text", text: prompt }]
+  > = [{ type: "text", text: finalPrompt }]
 
-  if (imageDataUrl) {
-    const imageBytes = byteLengthFromDataUrl(imageDataUrl)
+  const candidateImages = imageDataUrls.length ? imageDataUrls : imageDataUrl ? [imageDataUrl] : []
+  for (const candidate of candidateImages) {
+    const imageBytes = byteLengthFromDataUrl(candidate)
     if (typeof imageBytes === "number" && imageBytes > MAX_IMAGE_BYTES) {
-      return NextResponse.json(
-        { error: "Image too large. Max 10MB." },
-        { status: 413 }
-      )
+      return NextResponse.json({ error: "Image too large. Max 10MB." }, { status: 413 })
     }
+  }
 
+  candidateImages.forEach((candidate) => {
     contentParts.push({
       type: "image_url",
-      image_url: { url: imageDataUrl },
+      image_url: { url: candidate },
     })
-  }
+  })
 
   const openRouterHeaders: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
@@ -112,12 +180,25 @@ export async function POST(request: Request) {
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS)
+  const providerConfig =
+    selectedModel === "nano-banana-pro"
+      ? {
+          image_config: {
+            aspect_ratio: aspectRatio !== "auto" ? aspectRatio : undefined,
+            image_size: resolution.toUpperCase(),
+            output_mime_type: outputFormat === "jpeg" ? "image/jpeg" : "image/png",
+          },
+        }
+      : undefined
+
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: openRouterHeaders,
     body: JSON.stringify({
-      model: MODEL,
+      model: MODEL_MAP[selectedModel] ?? MODEL_MAP["nano-banana"],
       modalities: ["image", "text"],
+      n: imageCount > 1 ? imageCount : undefined,
+      provider: providerConfig,
       messages: [
         {
           role: "user",
@@ -138,7 +219,11 @@ export async function POST(request: Request) {
   }
 
   const message = result?.choices?.[0]?.message
-  const imageUrl = message?.images?.[0]?.image_url?.url ?? null
+  const imageUrls =
+    Array.isArray(message?.images) && message.images.length
+      ? message.images.map((item: { image_url?: { url?: string } }) => item?.image_url?.url).filter(Boolean)
+      : []
+  const imageUrl = imageUrls[0] ?? null
   const text = typeof message?.content === "string" ? message.content : null
 
   if (!imageUrl) {
@@ -151,5 +236,5 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json({ imageUrl, text })
+  return NextResponse.json({ imageUrl, imageUrls, text })
 }

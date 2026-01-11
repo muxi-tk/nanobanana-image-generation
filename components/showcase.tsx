@@ -1,26 +1,27 @@
 import { Card } from "@/components/ui/card"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Zap } from "lucide-react"
 
 const showcaseItems = [
   {
-    title: "Ultra-Fast Mountain Generation",
-    description: "Created in 0.8 seconds with optimized neural engine",
+    title: "Mountain scene edit",
+    description: "Example of background replacement with prompt-driven adjustments.",
     image: "/majestic-snow-capped-mountain-landscape.jpg",
   },
   {
-    title: "Instant Garden Creation",
-    description: "Complex scene rendered in milliseconds",
+    title: "Garden enhancement",
+    description: "Color grading and scene expansion with natural language prompts.",
     image: "/beautiful-garden-with-flowers.jpg",
   },
   {
-    title: "Real-time Beach Synthesis",
-    description: "Photorealistic results at lightning speed",
+    title: "Beach lighting shift",
+    description: "Atmosphere and lighting changes applied to the original image.",
     image: "/tropical-beach-sunset.png",
   },
   {
-    title: "Rapid Aurora Generation",
-    description: "Advanced effects processed instantly",
+    title: "Aurora overlay",
+    description: "Style transfer and effect layering based on prompt details.",
     image: "/images/northern-lights.png",
   },
 ]
@@ -32,10 +33,10 @@ export function Showcase() {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary mb-4">
             <Zap className="h-4 w-4" />
-            <span>Lightning-Fast AI Creations</span>
+            <span>Prompt-to-edit previews</span>
           </div>
           <h2 className="text-3xl md:text-5xl font-bold mb-4 text-balance">Showcase</h2>
-          <p className="text-lg text-muted-foreground text-balance">See what Nano Banana generates in milliseconds</p>
+          <p className="text-lg text-muted-foreground text-balance">See how prompts transform the original image</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6 mb-12">
@@ -49,7 +50,7 @@ export function Showcase() {
                   suppressHydrationWarning
                 />
                 <div className="absolute top-4 left-4 bg-primary/90 text-primary-foreground px-3 py-1 rounded-full text-xs font-medium">
-                  Nano Banana Speed
+                  Example output
                 </div>
               </div>
               <div className="p-6">
@@ -61,8 +62,8 @@ export function Showcase() {
         </div>
 
         <div className="text-center">
-          <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
-            Try Nano Banana Generator
+          <Button asChild size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Link href="/#generator">Try Nano Banana Generator</Link>
           </Button>
         </div>
       </div>

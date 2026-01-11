@@ -20,25 +20,31 @@ export async function Header() {
 
         <nav className="hidden md:flex items-center gap-6">
           <Link
-            href="#generator"
+            href="/#generator"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Generator
           </Link>
           <Link
-            href="#showcase"
+            href="/#showcase"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             Examples
           </Link>
           <Link
-            href="#testimonials"
+            href="/pricing"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            Reviews
+            Pricing
           </Link>
           <Link
-            href="#faq"
+            href="/support"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Support
+          </Link>
+          <Link
+            href="/#faq"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             FAQ
@@ -46,14 +52,9 @@ export async function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <Button asChild className="hidden sm:inline-flex bg-primary text-primary-foreground hover:bg-primary/90">
-            <Link href="#generator">Start Editing</Link>
-          </Button>
-
           {user ? (
             <>
-              <div className="hidden sm:flex flex-col items-end max-w-[200px] truncate">
-                <span className="text-xs text-muted-foreground">Signed in</span>
+              <div className="hidden sm:flex items-center max-w-[200px] truncate">
                 <span className="text-sm font-semibold truncate">{displayName}</span>
               </div>
               <form action={signOut}>
@@ -63,7 +64,9 @@ export async function Header() {
               </form>
             </>
           ) : (
-            <AuthMenu />
+            <>
+              <AuthMenu />
+            </>
           )}
         </div>
       </div>

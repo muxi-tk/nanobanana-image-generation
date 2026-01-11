@@ -5,34 +5,32 @@ const features = [
   {
     icon: Sparkles,
     title: "Natural Language Editing",
-    description: "Edit images using simple text prompts. AI understands complex instructions like GPT for images",
+    description: "Edit images using simple text prompts with guided AI assistance.",
   },
   {
     icon: Users,
     title: "Character Consistency",
-    description:
-      "Maintain perfect character details across edits. This model excels at preserving faces and identities",
+    description: "Maintain character details across edits and variations.",
   },
   {
     icon: ImageIcon,
     title: "Scene Preservation",
-    description: "Seamlessly blend edits with original backgrounds. Superior scene fusion compared to competitors",
+    description: "Blend edits with original backgrounds while keeping context intact.",
   },
   {
     icon: Zap,
     title: "One-Shot Editing",
-    description:
-      "Perfect results in a single attempt. Nano-banana solves one-shot image editing challenges effortlessly",
+    description: "Quick iterations that reduce the number of manual passes.",
   },
   {
     icon: Images,
     title: "Multi-Image Context",
-    description: "Process multiple images simultaneously. Support for advanced multi-image editing workflows",
+    description: "Process multiple images to keep outputs aligned across a set.",
   },
   {
     icon: TrendingUp,
     title: "AI UGC Creation",
-    description: "Create consistent AI influencers and UGC content. Perfect for social media and marketing campaigns",
+    description: "Create consistent assets for social media and marketing workflows.",
   },
 ]
 
@@ -42,9 +40,8 @@ export function Features() {
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-5xl font-bold mb-4 text-balance">Core Features</h2>
-          <p className="text-lg text-muted-foreground text-balance max-w-2xl mx-auto">Why Choose Nano Banana?</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Revolutionize your photo editing with natural language understanding
+          <p className="text-lg text-muted-foreground text-balance max-w-2xl mx-auto">
+            A practical AI editing workflow built for real production needs.
           </p>
         </div>
 

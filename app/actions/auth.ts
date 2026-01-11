@@ -26,6 +26,9 @@ export async function signInWithGoogle(formData?: FormData) {
     provider: "google",
     options: {
       redirectTo: redirectTo.toString(),
+      queryParams: {
+        prompt: "consent select_account",
+      },
     },
   })
 
