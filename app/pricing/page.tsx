@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Sparkles, ShieldCheck, Clock3, ImageIcon, Rocket, Layers, ArrowRight } from "lucide-react"
 import { siteConfig } from "@/lib/site"
+import { Suspense } from "react"
 
 const billingFaq = [
   {
@@ -77,7 +78,9 @@ export default function PricingPage() {
       <Header />
 
       <section id="plans" className="container mx-auto max-w-6xl px-4 pb-12 pt-8">
-        <PricingPlans />
+        <Suspense fallback={<div className="py-6 text-center text-sm text-muted-foreground">Loading plans...</div>}>
+          <PricingPlans />
+        </Suspense>
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           {guarantee.map((item) => (
             <Card key={item.title} className="p-4">
