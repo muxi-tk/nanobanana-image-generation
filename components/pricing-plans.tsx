@@ -78,7 +78,7 @@ const plans: Plan[] = [
     cta: "Subscribe Now",
     features: [
       "400 high-quality images / month",
-      "Seedream-4 model",
+      "Seedream-4.5 model",
       "Nanobanana-Pro model",
       "Priority generation queue",
       "Priority customer support",
@@ -101,7 +101,7 @@ const plans: Plan[] = [
     cta: "Subscribe Now",
     features: [
       "1,800 high-quality images / month",
-      "Seedream-4 model",
+      "Seedream-4.5 model",
       "Nanobanana-Pro model",
       "Fastest generation speed",
       "Dedicated account manager",

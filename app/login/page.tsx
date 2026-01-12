@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { LoginOptions } from "@/app/login/login-options"
 
@@ -13,7 +14,7 @@ export default async function LoginPage({
     <main className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 py-12">
         <Link href="/" className="mb-8 flex items-center gap-2 text-xl font-bold">
-          <span className="text-4xl">🍌</span>
+          <Image src="/prism.png" alt="Nano Banana logo" width={36} height={36} className="h-9 w-9" />
           <span>Nano Banana</span>
         </Link>
 

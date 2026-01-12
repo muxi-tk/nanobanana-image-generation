@@ -127,6 +127,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Prompt is required." }, { status: 400 })
   }
 
+  if (outputFormat === "webp" && selectedModel !== "seedream-4-5") {
+    return NextResponse.json(
+      { error: "WebP output is only supported for Seedream 4.5." },
+      { status: 400 }
+    )
+  }
+  if (selectedModel === "seedream-4-5" && resolution !== "2k" && resolution !== "4k") {
+    return NextResponse.json(
+      { error: "Seedream 4.5 only supports 2K and 4K resolutions." },
+      { status: 400 }
+    )
+  }
+
   if (generationMode === "text-to-image") {
     imageDataUrl = null
     imageDataUrls = []
@@ -181,16 +194,22 @@ export async function POST(request: Request) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS)
   const providerConfig =
-    selectedModel === "nano-banana-pro"
+    selectedModel === "nano-banana-pro" || selectedModel === "seedream-4-5"
       ? {
           image_config: {
             aspect_ratio: aspectRatio !== "auto" ? aspectRatio : undefined,
             image_size: resolution.toUpperCase(),
-            output_mime_type: outputFormat === "jpeg" ? "image/jpeg" : "image/png",
+            output_mime_type:
+              outputFormat === "jpeg"
+                ? "image/jpeg"
+                : outputFormat === "webp"
+                  ? "image/webp"
+                  : "image/png",
           },
         }
       : undefined
 
+  const messageContent = candidateImages.length ? contentParts : finalPrompt
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: openRouterHeaders,
@@ -202,7 +221,7 @@ export async function POST(request: Request) {
       messages: [
         {
           role: "user",
-          content: contentParts,
+          content: messageContent,
         },
       ],
     }),

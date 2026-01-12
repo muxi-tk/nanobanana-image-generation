@@ -39,11 +39,14 @@ const modelOptions: { value: ModelId; label: string; proOnly?: boolean }[] = [
 const aspectRatioOptions = [
   { value: "auto", label: "Auto" },
   { value: "1:1", label: "Square (1:1)" },
+  { value: "16:9", label: "Widescreen (16:9)" },
+  { value: "9:16", label: "Vertical (9:16)" },
   { value: "3:2", label: "Photo (3:2)" },
   { value: "2:3", label: "Portrait (2:3)" },
   { value: "3:4", label: "Portrait (3:4)" },
   { value: "4:3", label: "Landscape (4:3)" },
   { value: "4:5", label: "Social (4:5)" },
+  { value: "21:9", label: "Ultrawide (21:9)" },
 ]
 
 const imageCountOptions = [
@@ -62,6 +65,7 @@ const resolutionOptions = [
 const outputFormatOptions = [
   { value: "png", label: "PNG" },
   { value: "jpeg", label: "JPEG" },
+  { value: "webp", label: "WebP", seedreamOnly: true },
 ]
 
 export function ImageGenerator() {
@@ -82,21 +86,108 @@ export function ImageGenerator() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [notifyEnabled, setNotifyEnabled] = useState(false)
+  const [notifyStatus, setNotifyStatus] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const progressIntervalRef = useRef<number | null>(null)
+  const titleFlashIntervalRef = useRef<number | null>(null)
+  const titleFlashTimeoutRef = useRef<number | null>(null)
+  const originalTitleRef = useRef<string | null>(null)
+  const imageCountValue = Number.parseInt(imageCount, 10)
+  const safeImageCount = Number.isNaN(imageCountValue) || imageCountValue < 1 ? 1 : imageCountValue
+  const availableResolutions =
+    selectedModel === "seedream-4-5"
+      ? resolutionOptions.filter((option) => option.value !== "1k")
+      : resolutionOptions
   const maxReferenceImages =
     selectedModel === "nano-banana"
       ? 3
       : selectedModel === "nano-banana-pro"
         ? 14
-        : 9
+        : Math.max(0, Math.min(14, 15 - safeImageCount))
 
   const clearProgressInterval = () => {
     if (progressIntervalRef.current !== null) {
       window.clearInterval(progressIntervalRef.current)
       progressIntervalRef.current = null
     }
+  }
+
+  const stopTitleFlash = () => {
+    if (titleFlashIntervalRef.current !== null) {
+      window.clearInterval(titleFlashIntervalRef.current)
+      titleFlashIntervalRef.current = null
+    }
+    if (titleFlashTimeoutRef.current !== null) {
+      window.clearTimeout(titleFlashTimeoutRef.current)
+      titleFlashTimeoutRef.current = null
+    }
+    if (originalTitleRef.current) {
+      document.title = originalTitleRef.current
+      originalTitleRef.current = null
+    }
+  }
+
+  const startTitleFlash = (message: string) => {
+    if (typeof document === "undefined" || !document.hidden) {
+      return
+    }
+    stopTitleFlash()
+    originalTitleRef.current = document.title
+    let showAlt = false
+    titleFlashIntervalRef.current = window.setInterval(() => {
+      document.title = showAlt ? message : originalTitleRef.current || message
+      showAlt = !showAlt
+    }, 800)
+    titleFlashTimeoutRef.current = window.setTimeout(stopTitleFlash, 8000)
+  }
+
+  const playNotifySound = () => {
+    if (typeof window === "undefined") {
+      return
+    }
+    const AudioContextClass =
+      window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextClass) {
+      return
+    }
+    try {
+      const context = new AudioContextClass()
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      oscillator.type = "sine"
+      oscillator.frequency.value = 880
+      gain.gain.value = 0.06
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start()
+      const stopAt = context.currentTime + 1
+      gain.gain.exponentialRampToValueAtTime(0.0001, stopAt)
+      oscillator.stop(stopAt)
+      oscillator.onended = () => {
+        context.close()
+      }
+    } catch (err) {
+      console.warn("Notification sound failed", err)
+    }
+  }
+
+  const notifyCompletion = (status: "success" | "error") => {
+    if (!notifyEnabled) {
+      return
+    }
+    const title = status === "success" ? "Generation complete" : "Generation failed"
+    const body = status === "success" ? "Your images are ready." : "Check the error message for details."
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification(title, { body })
+      } catch (err) {
+        console.warn("Notification failed", err)
+      }
+    }
+    startTitleFlash(title)
+    playNotifySound()
   }
 
   const needsUpgrade = () => !isLoggedIn || !isProMember
@@ -157,12 +248,38 @@ export function ImageGenerator() {
 
     return () => {
       clearProgressInterval()
+      stopTitleFlash()
     }
   }, [])
 
   useEffect(() => {
     setUploadedImages((prev) => prev.slice(0, maxReferenceImages))
   }, [maxReferenceImages])
+
+  useEffect(() => {
+    if (selectedModel === "seedream-4-5" && resolution === "1k") {
+      setResolution("2k")
+    }
+  }, [resolution, selectedModel])
+
+  useEffect(() => {
+    if (outputFormat === "webp" && selectedModel !== "seedream-4-5") {
+      setOutputFormat("png")
+    }
+  }, [outputFormat, selectedModel])
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        stopTitleFlash()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility)
+      stopTitleFlash()
+    }
+  }, [])
 
   useEffect(() => {
     const fetchAuthStatus = async () => {
@@ -184,6 +301,35 @@ export function ImageGenerator() {
 
     fetchAuthStatus()
   }, [])
+
+  const handleNotifyToggle = async (checked: boolean) => {
+    setNotifyStatus(null)
+    if (!checked) {
+      setNotifyEnabled(false)
+      return
+    }
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setNotifyStatus("Browser notifications are not supported in this browser.")
+      setNotifyEnabled(false)
+      return
+    }
+    if (Notification.permission === "granted") {
+      setNotifyEnabled(true)
+      return
+    }
+    if (Notification.permission === "denied") {
+      setNotifyStatus("Notifications are blocked in your browser settings.")
+      setNotifyEnabled(false)
+      return
+    }
+    const permission = await Notification.requestPermission()
+    if (permission === "granted") {
+      setNotifyEnabled(true)
+    } else {
+      setNotifyStatus("Notification permission was not granted.")
+      setNotifyEnabled(false)
+    }
+  }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -316,6 +462,7 @@ export function ImageGenerator() {
       if (!res.ok) {
         setError(data?.error || `Request failed (${res.status}).`)
         setProgress(0)
+        notifyCompletion("error")
         return
       }
 
@@ -323,15 +470,18 @@ export function ImageGenerator() {
       if (!images.length) {
         setError("No image returned. Try a different prompt.")
         setProgress(0)
+        notifyCompletion("error")
         return
       }
 
       setGeneratedImages(images)
       setGeneratedImageUrl(images[0])
       setProgress(100)
+      notifyCompletion("success")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error.")
       setProgress(0)
+      notifyCompletion("error")
     } finally {
       clearProgressInterval()
       setIsGenerating(false)
@@ -442,7 +592,7 @@ export function ImageGenerator() {
                             <SelectValue placeholder="Select resolution" />
                           </SelectTrigger>
                           <SelectContent>
-                            {resolutionOptions.map((option) => (
+                            {availableResolutions.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
                                 <div className="flex w-full items-center justify-between gap-3">
                                   <span>{option.label}</span>
@@ -457,19 +607,27 @@ export function ImageGenerator() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium text-muted-foreground">Output Format</label>
-                        <Select value={outputFormat} onValueChange={setOutputFormat}>
-                          <SelectTrigger className="h-12 w-full rounded-lg border-2 border-foreground/20 bg-background">
-                            <SelectValue placeholder="Select format" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {outputFormatOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
+                      <Select value={outputFormat} onValueChange={setOutputFormat}>
+                        <SelectTrigger className="h-12 w-full rounded-lg border-2 border-foreground/20 bg-background">
+                          <SelectValue placeholder="Select format" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {outputFormatOptions.map((option) => {
+                            const disabled = option.seedreamOnly && selectedModel !== "seedream-4-5"
+                            return (
+                              <SelectItem key={option.value} value={option.value} disabled={disabled}>
+                                <div className="flex w-full items-center justify-between gap-3">
+                                  <span>{option.label}</span>
+                                  {disabled ? (
+                                    <span className="text-[10px] font-semibold text-muted-foreground">Seedream</span>
+                                  ) : null}
+                                </div>
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     </div>
                   ) : null}
                   {selectedModel === "seedream-4-5" ? (
@@ -570,6 +728,20 @@ export function ImageGenerator() {
                 </div>
 
                 {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={notifyEnabled}
+                      onChange={(e) => handleNotifyToggle(e.target.checked)}
+                      disabled={isGenerating}
+                    />
+                    Notify me when complete
+                  </label>
+                  {notifyStatus ? <p className="text-xs text-muted-foreground">{notifyStatus}</p> : null}
+                </div>
 
                 <Button
                   className="h-12 w-full rounded-full bg-amber-300 text-white hover:bg-amber-400"
