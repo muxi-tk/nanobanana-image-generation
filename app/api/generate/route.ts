@@ -255,5 +255,26 @@ export async function POST(request: Request) {
     )
   }
 
+  const imagesToStore = imageUrls.length ? imageUrls : [imageUrl]
+  if (imagesToStore.length) {
+    try {
+      const { error: historyError } = await supabase.from("image_history").insert({
+        user_id: authData.user.id,
+        prompt,
+        image_urls: imagesToStore,
+        model: selectedModel,
+        aspect_ratio: aspectRatio,
+        resolution,
+        output_format: outputFormat,
+        generation_mode: generationMode,
+      })
+      if (historyError) {
+        console.error("Failed to store image history", historyError)
+      }
+    } catch (error) {
+      console.error("Unexpected history storage error", error)
+    }
+  }
+
   return NextResponse.json({ imageUrl, imageUrls, text })
 }

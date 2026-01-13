@@ -20,6 +20,9 @@ async function getCookieStore() {
       try {
         cookieStore.set({ name, value, ...options })
       } catch (error) {
+        if (error instanceof Error && error.message.includes("Cookies can only be modified")) {
+          return
+        }
         console.error("Failed to set auth cookie", error)
       }
     },
@@ -27,6 +30,9 @@ async function getCookieStore() {
       try {
         cookieStore.set({ name, value: "", ...options, maxAge: 0 })
       } catch (error) {
+        if (error instanceof Error && error.message.includes("Cookies can only be modified")) {
+          return
+        }
         console.error("Failed to clear auth cookie", error)
       }
     },

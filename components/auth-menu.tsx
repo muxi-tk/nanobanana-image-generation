@@ -29,7 +29,13 @@ function GoogleIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-export function AuthMenu() {
+export function AuthMenu({
+  signInLabel = "Sign In",
+  continueWithGoogleLabel = "Continue with Google",
+}: {
+  signInLabel?: string
+  continueWithGoogleLabel?: string
+}) {
   const [nextUrl, setNextUrl] = useState("/")
 
   useEffect(() => {
@@ -40,7 +46,7 @@ export function AuthMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" className="gap-1.5">
-          Sign In
+          {signInLabel}
           <ChevronDown className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -50,7 +56,7 @@ export function AuthMenu() {
           <DropdownMenuItem asChild>
             <button type="submit" formAction={signInWithGoogle} className="w-full flex items-center gap-3">
               <GoogleIcon className="h-5 w-5" />
-              Continue with Google
+              {continueWithGoogleLabel}
             </button>
           </DropdownMenuItem>
         </form>

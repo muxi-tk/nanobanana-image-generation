@@ -213,7 +213,7 @@ export function ImageGenerator() {
   }
 
   const handleResolutionChange = (value: string) => {
-    if (value !== "1k" && needsUpgrade()) {
+    if (selectedModel === "seedream-4-5" && value !== "1k" && needsUpgrade()) {
       setUpgradeTitle("VIP Resolution - Pro Access")
       setUpgradeOpen(true)
       return
@@ -224,14 +224,17 @@ export function ImageGenerator() {
   const computeCredits = () => {
     const count = Number.parseInt(imageCount, 10)
     const imageMultiplier = Number.isNaN(count) ? 1 : count
-    const baseCredits: Record<ModelId, number> = {
-      "nano-banana": 6,
-      "nano-banana-pro": 8,
-      "seedream-4-5": 10,
+
+    if (selectedModel === "nano-banana") {
+      return 2 * imageMultiplier
     }
-    const base = baseCredits[selectedModel]
-    const resolutionExtra = selectedModel === "nano-banana" ? 0 : resolution === "4k" ? 10 : 0
-    return base * imageMultiplier + resolutionExtra
+
+    if (selectedModel === "nano-banana-pro") {
+      const perImage = resolution === "4k" ? 20 : resolution === "2k" ? 10 : 6
+      return perImage * imageMultiplier
+    }
+
+    return 10 * imageMultiplier
   }
 
   useEffect(() => {
@@ -635,6 +638,11 @@ export function ImageGenerator() {
                       <p>Seedream 4.5 is available to Pro members only.</p>
                       <p>4K resolution consumes an extra 10 credits.</p>
                     </div>
+                  ) : selectedModel === "nano-banana-pro" ? (
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <p>Nano Banana Pro credits scale by resolution.</p>
+                      <p>1K: 6, 2K: 10, 4K: 20 credits per image.</p>
+                    </div>
                   ) : selectedModel !== "nano-banana" ? (
                     <div className="space-y-1 text-xs text-muted-foreground">
                       <p>High-quality output is available for this model.</p>
@@ -649,7 +657,7 @@ export function ImageGenerator() {
                   className="w-full"
                 >
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="image-edit">Image Edit</TabsTrigger>
+                  <TabsTrigger value="image-edit">Image to Image</TabsTrigger>
                     <TabsTrigger value="text-to-image">Text to Image</TabsTrigger>
                   </TabsList>
                 </Tabs>

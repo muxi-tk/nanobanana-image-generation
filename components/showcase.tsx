@@ -63,7 +63,7 @@ export function Showcase() {
 
         <div className="text-center">
           <Button asChild size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
-            <Link href="/#generator">Try Nano Banana Generator</Link>
+            <Link href="/generator">Try Nano Banana Generator</Link>
           </Button>
         </div>
       </div>
