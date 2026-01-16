@@ -1,52 +1,75 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { siteConfig } from "@/lib/site"
+"use client"
 
-const faqs = [
-  {
-    question: "What is Nano Banana?",
-    answer:
-      "Nano Banana is an AI image editor that applies text prompts to transform images. It focuses on consistent edits and fast iterations for common creative workflows.",
-  },
-  {
-    question: "How does it work?",
-    answer:
-      'Upload an image, describe the edit in plain language, and the system generates a revised image based on your prompt. Results can vary by input and prompt detail.',
-  },
-  {
-    question: "What makes Nano Banana special?",
-    answer:
-      "It is optimized for character consistency, scene edits, and multi-image context so teams can iterate quickly with fewer manual steps.",
-  },
-  {
-    question: "Can I use it for commercial projects?",
-    answer:
-      "You can use your outputs commercially as long as you have rights to the source assets and comply with our terms.",
-  },
-  {
-    question: "What types of edits can it handle?",
-    answer:
-      "Common edits include background changes, object placement, style transfers, and character adjustments. Some prompts may require multiple iterations.",
-  },
-  {
-    question: "How do I contact support?",
-    answer: `Email us at ${siteConfig.supportEmail || "support@yourdomain.com"} and we will get back to you quickly.`,
-  },
-]
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { useI18n } from "@/components/i18n-provider"
 
 export function FAQ() {
+  const { locale } = useI18n()
+  const isZh = locale === "zh"
+  const title = isZh ? "常见问题解答" : "FAQ"
+  const faqs = isZh
+    ? [
+        {
+          question: "Nano Banana 是什么？",
+          answer:
+            "Nano Banana 是一款 AI 图像编辑工具，通过文本提示对图片进行修改与生成，适合快速迭代与一致性编辑。",
+        },
+        {
+          question: "它如何工作？",
+          answer: "上传图片并输入提示词，系统会根据描述生成新的版本，结果会根据输入与提示词不同而变化。",
+        },
+        {
+          question: "支持哪些编辑类型？",
+          answer: "常见编辑包括背景替换、风格调整、元素替换、细节修饰等。",
+        },
+        {
+          question: "可以商用吗？",
+          answer: "只要你拥有原始素材的使用权，并遵守我们的条款，即可用于商业用途。",
+        },
+        {
+          question: "如何联系支持？",
+          answer: "请通过支持页面联系我们，我们会尽快回复。",
+        },
+      ]
+    : [
+        {
+          question: "What is Nano Banana?",
+          answer:
+            "Nano Banana is an AI image editor that applies text prompts to transform images. It focuses on fast iterations and consistent edits.",
+        },
+        {
+          question: "How does it work?",
+          answer:
+            "Upload an image and describe the edit. The system generates a revised version based on your prompt.",
+        },
+        {
+          question: "What types of edits are supported?",
+          answer:
+            "Common edits include background changes, style adjustments, element swaps, and detail refinements.",
+        },
+        {
+          question: "Can I use it commercially?",
+          answer:
+            "Yes, as long as you have the rights to the source assets and comply with our terms.",
+        },
+        {
+          question: "How do I contact support?",
+          answer: "Please reach out via the Support page and we will respond soon.",
+        },
+      ]
+
   return (
     <section id="faq" className="py-20 bg-secondary/30">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="mx-auto max-w-3xl">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-5xl font-bold mb-4 text-balance">FAQs</h2>
-            <p className="text-lg text-muted-foreground text-balance">Frequently Asked Questions</p>
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-5xl font-bold text-balance">{title}</h2>
           </div>
 
           <Accordion type="single" collapsible className="w-full space-y-2">
             {faqs.map((faq, index) => (
               <AccordionItem
-                key={index}
+                key={`${faq.question}-${index}`}
                 value={`item-${index}`}
                 className="border border-border/50 rounded-lg px-3 bg-background/60 last:border-b"
               >

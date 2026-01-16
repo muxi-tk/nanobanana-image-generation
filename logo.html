@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>Seedream 立体 Logo 预览</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 50px; background-color: #f5f5f5; }
+        .container { display: flex; gap: 40px; margin-top: 30px; }
+        
+        .preview-box {
+            padding: 60px;
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid #ddd;
+            transition: all 0.3s ease;
+        }
+
+        /* 模拟明亮模式 */
+        .light-mode { background-color: #ffffff; color: #1a1a1a; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        /* 模拟暗黑模式 */
+        .dark-mode { background-color: #0f172a; color: #f8fafc; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+
+        .label { margin-bottom: 25px; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        /* 调整 SVG 大小 */
+        svg { width: 100px; height: 100px; }
+    </style>
+</head>
+<body>
+
+    <h2>Seedream 3D 立体 Logo 预览</h2>
+    <p>采用等轴测透视设计，支持 currentColor 自动变色</p>
+
+    <div class="container">
+        <div class="preview-box light-mode">
+            <div class="label">Light Mode</div>
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L4 7V17L12 22L20 17V7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="M12 2V12M12 22V12M12 12L4 7M12 12L20 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 2L20 7V17L12 22V12L12 2Z" fill="currentColor" fill-opacity="0.05"/>
+            </svg>
+        </div>
+
+        <div class="dark-mode preview-box">
+            <div class="label">Dark Mode</div>
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L4 7V17L12 22L20 17V7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="M12 2V12M12 22V12M12 12L4 7M12 12L20 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 2L20 7V17L12 22V12L12 2Z" fill="currentColor" fill-opacity="0.1"/>
+            </svg>
+        </div>
+    </div>
+
+</body>
+</html>

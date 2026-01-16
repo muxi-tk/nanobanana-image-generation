@@ -91,7 +91,7 @@ export async function POST(req: Request) {
   const checkoutUrl = data?.checkout_url || data?.checkout?.checkout_url
   if (!checkoutUrl) {
     return NextResponse.json(
-      { error: "Creem did not return a checkout URL.", details: data },
+      { error: "Checkout did not return a URL.", details: data },
       { status: 502 }
     )
   }

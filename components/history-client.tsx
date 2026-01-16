@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -12,6 +11,9 @@ import {
   LayoutGrid,
   List,
   Search,
+  Trash2,
+  Eye,
+  FileText,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -37,8 +39,20 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
+import { Logo } from "@/components/logo"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { useI18n } from "@/components/i18n-provider"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
 
 type HistoryRecord = {
   id: string
@@ -54,6 +68,7 @@ type HistoryRecord = {
 
 type HistoryImage = {
   id: string
+  recordId: string
   url: string
   createdAt: string
   prompt: string
@@ -62,20 +77,6 @@ type HistoryImage = {
   resolution?: string | null
   aspectRatio?: string | null
   outputFormat?: string | null
-}
-
-const formatDate = (value: string) => {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return "Unknown date"
-  }
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
 }
 
 const modelLabels: Record<string, string> = {
@@ -92,6 +93,18 @@ const getPromptTitle = (value: string | null | undefined, fallback: string) => {
   return prompt.length > 80 ? `${prompt.slice(0, 80)}...` : prompt
 }
 
+const normalizeGenerationMode = (value: string | null | undefined) => {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase().replace(/_/g, "-")
+  if (["image-edit", "image-to-image", "image2image", "img2img", "img-to-img"].includes(normalized)) {
+    return "image-edit"
+  }
+  if (["text-to-image", "text2image", "txt2img", "t2i"].includes(normalized)) {
+    return "text-to-image"
+  }
+  return normalized
+}
+
 export function HistoryClient() {
   const pathname = usePathname()
   const [items, setItems] = useState<HistoryRecord[]>([])
@@ -102,7 +115,31 @@ export function HistoryClient() {
   const [dateFilter, setDateFilter] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedImage, setSelectedImage] = useState<HistoryImage | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<HistoryImage | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [promptOpen, setPromptOpen] = useState(false)
+  const [promptCopied, setPromptCopied] = useState(false)
   const { t } = useI18n()
+  const { toast } = useToast()
+  const getDisplayGenerationLabel = (value: string | null | undefined) => {
+    const normalized = normalizeGenerationMode(value)
+    if (normalized === "image-edit") return t("historyTypeImageEdit")
+    if (normalized === "text-to-image") return t("historyTypeText")
+    return normalized ?? ""
+  }
+  const formatDate = (value: string) => {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) {
+      return t("historyUnknownDate")
+    }
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -139,6 +176,7 @@ export function HistoryClient() {
       return urls.map((url, index) => ({
         id: `${item.id}-${index}`,
         url,
+        recordId: item.id,
         createdAt: item.created_at,
         prompt: item.prompt ?? "",
         model: item.model,
@@ -160,11 +198,8 @@ export function HistoryClient() {
           ? 30
           : null
 
-    return flattened.filter((item) => {
+    const baseFiltered = flattened.filter((item) => {
       if (query && !item.prompt.toLowerCase().includes(query)) {
-        return false
-      }
-      if (typeFilter !== "all" && item.generationMode !== typeFilter) {
         return false
       }
       if (cutoffDays) {
@@ -179,7 +214,69 @@ export function HistoryClient() {
       }
       return true
     })
+
+    if (typeFilter === "all") {
+      return baseFiltered
+    }
+
+    const normalizedFilter = normalizeGenerationMode(typeFilter)
+    return baseFiltered.filter(
+      (item) => normalizeGenerationMode(item.generationMode) === normalizedFilter
+    )
   }, [dateFilter, flattened, search, typeFilter])
+
+  const handleDelete = async () => {
+    if (!deleteTarget) {
+      return
+    }
+    const recordId = deleteTarget.recordId
+    setDeletingId(recordId)
+    try {
+      const res = await fetch(`/api/history?id=${encodeURIComponent(recordId)}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        throw new Error(`Delete failed: ${res.status}`)
+      }
+      setItems((prev) => prev.filter((item) => item.id !== recordId))
+      toast({ title: t("historyDeleteSuccess") })
+    } catch (err) {
+      console.error("Failed to delete history item", err)
+      toast({ title: t("historyDeleteError"), variant: "destructive" })
+    } finally {
+      setDeletingId(null)
+      setDeleteTarget(null)
+    }
+  }
+
+  const handleCopyPrompt = async () => {
+    const text = selectedImage?.prompt?.trim() || ""
+    if (!text) {
+      toast({ title: t("historyPromptEmpty") })
+      return
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement("textarea")
+        textarea.value = text
+        textarea.style.position = "fixed"
+        textarea.style.opacity = "0"
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand("copy")
+        document.body.removeChild(textarea)
+      }
+      setPromptCopied(true)
+      toast({ title: t("historyPromptCopied") })
+      window.setTimeout(() => setPromptCopied(false), 1500)
+    } catch (err) {
+      console.error("Prompt copy failed", err)
+      toast({ title: t("historyPromptCopyError"), variant: "destructive" })
+    }
+  }
 
   return (
     <SidebarProvider defaultOpen>
@@ -188,12 +285,12 @@ export function HistoryClient() {
         className="border-border/60 bg-sidebar/60 top-16 h-[calc(100svh-4rem)]"
       >
         <SidebarHeader className="border-sidebar-border gap-4 border-b px-4 py-4 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
-          <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center">
             <Link href="/" className="flex items-center gap-3">
-              <Image src="/prism.png" alt="Nano Banana logo" width={32} height={32} className="h-8 w-8" />
+              <Logo className="h-8 w-8 text-foreground" />
               <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="text-sm font-semibold">Nano Banana</span>
-                <span className="text-xs text-muted-foreground">AI Generator</span>
+                <span className="text-xs text-muted-foreground">{t("aiGenerator")}</span>
               </div>
             </Link>
             <SidebarTrigger className="inline-flex" />
@@ -205,11 +302,16 @@ export function HistoryClient() {
               <SidebarMenuButton
                 tooltip={t("generateImage")}
                 isActive={pathname === "/generator"}
-                className="sidebar-ripple"
+                className="sidebar-ripple group"
                 asChild
               >
                 <Link href="/generator">
-                  <Sparkles className={cn(pathname === "/generator" ? "text-amber-500" : "text-muted-foreground")} />
+                  <Sparkles
+                    className={cn(
+                      "text-muted-foreground group-hover:text-sidebar-accent-foreground group-data-[active=true]:text-sidebar-accent-foreground",
+                      pathname === "/generator" && "text-sidebar-accent-foreground"
+                    )}
+                  />
                   <span>{t("generateImage")}</span>
                 </Link>
               </SidebarMenuButton>
@@ -218,11 +320,16 @@ export function HistoryClient() {
               <SidebarMenuButton
                 tooltip={t("historyNav")}
                 isActive={pathname === "/history"}
-                className="sidebar-ripple"
+                className="sidebar-ripple group"
                 asChild
               >
                 <Link href="/history">
-                  <History className={cn(pathname === "/history" ? "text-amber-500" : "text-muted-foreground")} />
+                  <History
+                    className={cn(
+                      "text-muted-foreground group-hover:text-sidebar-accent-foreground group-data-[active=true]:text-sidebar-accent-foreground",
+                      pathname === "/history" && "text-sidebar-accent-foreground"
+                    )}
+                  />
                   <span>{t("historyNav")}</span>
                 </Link>
               </SidebarMenuButton>
@@ -232,14 +339,10 @@ export function HistoryClient() {
       </Sidebar>
       <SidebarRail />
       <SidebarInset className="bg-muted/30">
-        <div className="flex min-h-svh flex-col gap-8 px-6 py-10 lg:px-10">
-          <header className="space-y-2">
-            <h1 className="text-3xl font-semibold text-foreground">{t("historyTitle")}</h1>
-            <p className="text-sm text-muted-foreground">{t("historySubtitle")}</p>
-          </header>
-
-          <div className="space-y-6">
-              <Card className="border-border/60 bg-white/90 p-4 shadow-sm">
+        <div className="mx-auto w-full max-w-7xl px-4">
+          <div className="mx-auto flex min-h-svh max-w-6xl flex-col gap-8 py-20">
+            <div className="space-y-6">
+              <Card className="border-border/60 bg-background p-4 shadow-sm">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
                   <div className="relative flex-1">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -252,8 +355,8 @@ export function HistoryClient() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <Select value={typeFilter} onValueChange={setTypeFilter}>
-                      <SelectTrigger className="h-11 w-[150px]">
-                        <SelectValue placeholder="Type" />
+                      <SelectTrigger className="h-11 w-[150px] !h-11">
+                        <SelectValue placeholder={t("historyTypePlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t("historyTypeAll")}</SelectItem>
@@ -262,8 +365,8 @@ export function HistoryClient() {
                       </SelectContent>
                     </Select>
                     <Select value={dateFilter} onValueChange={setDateFilter}>
-                      <SelectTrigger className="h-11 w-[150px]">
-                        <SelectValue placeholder="Date" />
+                      <SelectTrigger className="h-11 w-[150px] !h-11">
+                        <SelectValue placeholder={t("historyDatePlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t("historyDateAll")}</SelectItem>
@@ -296,15 +399,15 @@ export function HistoryClient() {
               </Card>
 
               {loading ? (
-                <Card className="border-border/60 bg-white/90 p-10 text-center text-sm text-muted-foreground">
+                <Card className="border-border/60 bg-background p-10 text-center text-sm text-muted-foreground">
                   {t("historyLoad")}
                 </Card>
               ) : error ? (
-                <Card className="border-border/60 bg-white/90 p-10 text-center text-sm text-muted-foreground">
+                <Card className="border-border/60 bg-background p-10 text-center text-sm text-muted-foreground">
                   {error}
                 </Card>
               ) : filtered.length === 0 ? (
-                <Card className="border-border/60 bg-white/90 p-8 shadow-sm">
+                <Card className="border-border/60 bg-background p-8 shadow-sm">
                   <Empty className="border border-dashed border-border/60 bg-muted/40">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
@@ -319,8 +422,9 @@ export function HistoryClient() {
                 <div className="space-y-3">
                   {filtered.map((item) => {
                     const title = getPromptTitle(item.prompt, formatDate(item.createdAt))
+                    const typeLabel = getDisplayGenerationLabel(item.generationMode)
                     return (
-                      <Card key={item.id} className="border-border/60 bg-white/90 p-4 shadow-sm">
+                      <Card key={item.id} className="border-border/60 bg-background p-4 shadow-sm">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                           <button
                             type="button"
@@ -338,17 +442,36 @@ export function HistoryClient() {
                               </span>
                               {item.model ? <span>{modelLabels[item.model] ?? item.model}</span> : null}
                               {item.resolution ? <span>{item.resolution.toUpperCase()}</span> : null}
+                              {typeLabel ? (
+                                <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                  {typeLabel}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setSelectedImage(item)}>
+                            <Button
+                              size="sm"
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
+                              onClick={() => setSelectedImage(item)}
+                            >
+                              <Eye className="h-4 w-4" />
                               {t("historyView")}
                             </Button>
-                            <Button asChild size="sm" className="bg-amber-200 text-amber-900 hover:bg-amber-300">
+                            <Button asChild size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
                               <a href={item.url} download="nano-banana.png">
                                 <Download className="h-4 w-4" />
                                 {t("historyDownload")}
                               </a>
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
+                              onClick={() => setDeleteTarget(item)}
+                              disabled={deletingId === item.recordId}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              {t("historyDelete")}
                             </Button>
                           </div>
                         </div>
@@ -360,24 +483,36 @@ export function HistoryClient() {
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {filtered.map((item) => {
                     const title = getPromptTitle(item.prompt, formatDate(item.createdAt))
+                    const typeLabel = getDisplayGenerationLabel(item.generationMode)
                     return (
-                      <Card key={item.id} className="group overflow-hidden border-border/60 bg-white/95 shadow-sm">
+                      <Card key={item.id} className="group overflow-hidden border-border/60 bg-background shadow-sm">
                         <div className="relative aspect-[4/3] overflow-hidden">
                           <img src={item.url} alt={title} className="h-full w-full object-cover" />
                           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition group-hover:opacity-100">
                             <Button
                               type="button"
                               size="sm"
-                              variant="secondary"
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
                               onClick={() => setSelectedImage(item)}
                             >
+                              <Eye className="h-4 w-4" />
                               {t("historyView")}
                             </Button>
-                            <Button asChild size="sm" className="bg-amber-200 text-amber-900 hover:bg-amber-300">
+                            <Button asChild size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
                               <a href={item.url} download="nano-banana.png">
                                 <Download className="h-4 w-4" />
                                 {t("historyDownload")}
                               </a>
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-primary text-primary-foreground hover:bg-primary/90"
+                              onClick={() => setDeleteTarget(item)}
+                              disabled={deletingId === item.recordId}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              {t("historyDelete")}
                             </Button>
                           </div>
                         </div>
@@ -389,6 +524,11 @@ export function HistoryClient() {
                               {formatDate(item.createdAt)}
                             </span>
                             {item.model ? <span>{modelLabels[item.model] ?? item.model}</span> : null}
+                            {typeLabel ? (
+                              <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                {typeLabel}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </Card>
@@ -396,11 +536,20 @@ export function HistoryClient() {
                   })}
                 </div>
               )}
+            </div>
           </div>
         </div>
       </SidebarInset>
 
-      <Dialog open={Boolean(selectedImage)} onOpenChange={(open) => !open && setSelectedImage(null)}>
+      <Dialog
+        open={Boolean(selectedImage)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedImage(null)
+            setPromptOpen(false)
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Generated Image</DialogTitle>
@@ -414,24 +563,91 @@ export function HistoryClient() {
                   className="w-full object-contain"
                 />
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <div className="flex flex-col gap-3 text-sm">
                 <div className="space-y-1">
                   <p className="font-semibold">
                     {getPromptTitle(selectedImage.prompt, formatDate(selectedImage.createdAt))}
                   </p>
-                  <p className="text-xs text-muted-foreground">{formatDate(selectedImage.createdAt)}</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>{formatDate(selectedImage.createdAt)}</span>
+                    {selectedImage.generationMode ? (
+                      <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {getDisplayGenerationLabel(selectedImage.generationMode)}
+                      </span>
+                    ) : null}
+                    {selectedImage.model ? (
+                      <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {modelLabels[selectedImage.model] ?? selectedImage.model}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                <Button asChild className="bg-amber-200 text-amber-900 hover:bg-amber-300">
-                  <a href={selectedImage.url} download="nano-banana.png">
-                    <Download className="h-4 w-4" />
-                    Download
-                  </a>
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90">
+                    <a href={selectedImage.url} download="nano-banana.png">
+                      <Download className="h-4 w-4" />
+                      {t("historyDownload")}
+                    </a>
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={() => setPromptOpen(true)}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {t("historyPromptFull")}
+                  </Button>
+                  <Button
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={() => setDeleteTarget(selectedImage)}
+                    disabled={deletingId === selectedImage.recordId}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t("historyDelete")}
+                  </Button>
+                </div>
               </div>
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={promptOpen} onOpenChange={setPromptOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("historyPromptTitle")}</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-foreground">
+            {selectedImage?.prompt || t("historyPromptEmpty")}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={handleCopyPrompt}
+              disabled={promptCopied}
+            >
+              {promptCopied ? t("historyPromptCopied") : t("historyPromptCopy")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("historyDeleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("historyDeleteDesc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(deletingId)}>
+              {t("historyDeleteCancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={Boolean(deletingId)}>
+              {t("historyDeleteConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   )
 }

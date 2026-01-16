@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 const MODEL_MAP: Record<string, string> = {
@@ -123,6 +124,11 @@ export async function POST(request: Request) {
     }
   }
 
+  if (generationMode === "text-to-image") {
+    imageDataUrl = null
+    imageDataUrls = []
+  }
+
   if (!prompt) {
     return NextResponse.json({ error: "Prompt is required." }, { status: 400 })
   }
@@ -138,11 +144,6 @@ export async function POST(request: Request) {
       { error: "Seedream 4.5 only supports 2K and 4K resolutions." },
       { status: 400 }
     )
-  }
-
-  if (generationMode === "text-to-image") {
-    imageDataUrl = null
-    imageDataUrls = []
   }
 
   const settings: string[] = []
@@ -193,21 +194,7 @@ export async function POST(request: Request) {
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS)
-  const providerConfig =
-    selectedModel === "nano-banana-pro" || selectedModel === "seedream-4-5"
-      ? {
-          image_config: {
-            aspect_ratio: aspectRatio !== "auto" ? aspectRatio : undefined,
-            image_size: resolution.toUpperCase(),
-            output_mime_type:
-              outputFormat === "jpeg"
-                ? "image/jpeg"
-                : outputFormat === "webp"
-                  ? "image/webp"
-                  : "image/png",
-          },
-        }
-      : undefined
+  const providerConfig = undefined
 
   const messageContent = candidateImages.length ? contentParts : finalPrompt
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -274,6 +261,129 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error("Unexpected history storage error", error)
     }
+  }
+
+  const creditMultiplier = imageCount > 1 ? imageCount : 1
+  const perImageCredits =
+    selectedModel === "nano-banana"
+      ? 2
+      : selectedModel === "nano-banana-pro"
+        ? resolution === "4k"
+          ? 20
+          : resolution === "2k"
+            ? 10
+            : 6
+        : resolution === "4k"
+          ? 20
+          : 10
+  const requiredCredits = perImageCredits * creditMultiplier
+
+  try {
+    const admin = createAdminClient()
+    const nowIso = new Date().toISOString()
+    const { data: grants, error: grantsError } = await admin
+      .from("credit_grants")
+      .select("id, source, credits_remaining, expires_at, created_at")
+      .eq("user_id", authData.user.id)
+      .gt("credits_remaining", 0)
+
+    if (!grantsError && Array.isArray(grants) && grants.length > 0) {
+      const subscriptionGrants = grants
+        .filter((grant) => grant.source === "subscription" && (!grant.expires_at || grant.expires_at > nowIso))
+        .sort((a, b) => {
+          const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Number.MAX_SAFE_INTEGER
+          const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Number.MAX_SAFE_INTEGER
+          return aTime - bTime
+        })
+      const packGrants = grants
+        .filter((grant) => grant.source === "credit-pack")
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+      let remainingToDeduct = requiredCredits
+      const updates: Array<{ id: string; credits_remaining: number }> = []
+      for (const grant of [...subscriptionGrants, ...packGrants]) {
+        if (remainingToDeduct <= 0) break
+        const available = grant.credits_remaining
+        const deduction = Math.min(available, remainingToDeduct)
+        updates.push({ id: grant.id, credits_remaining: available - deduction })
+        remainingToDeduct -= deduction
+      }
+
+      if (updates.length) {
+        await Promise.all(
+          updates.map((update) =>
+            admin.from("credit_grants").update({ credits_remaining: update.credits_remaining }).eq("id", update.id)
+          )
+        )
+      }
+      if (remainingToDeduct > 0) {
+        console.warn("Credits deduction incomplete; insufficient balance at update time.")
+      }
+    } else {
+      const { data: profile, error: profileError } = await admin
+        .from("profiles")
+        .select("*")
+        .eq("id", authData.user.id)
+        .maybeSingle()
+
+      const creditFields = [
+        "credits",
+        "credit_balance",
+        "balance",
+        "credit",
+        "remaining_credits",
+        "available_credits",
+      ] as const
+
+      let creditField: (typeof creditFields)[number] | null = null
+      let currentCredits: number | null = null
+
+      if (!profileError && profile) {
+        for (const field of creditFields) {
+          const value = profile[field]
+          const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN
+          if (!Number.isNaN(parsed)) {
+            creditField = field
+            currentCredits = parsed
+            break
+          }
+        }
+      }
+
+      if (currentCredits === null) {
+        const meta = { ...authData.user.app_metadata, ...authData.user.user_metadata }
+        const metaCredits = Number(
+          meta.credits ??
+            meta.credit_balance ??
+            meta.balance ??
+            meta.credit ??
+            meta.remaining_credits ??
+            meta.available_credits
+        )
+        currentCredits = Number.isNaN(metaCredits) ? 10 : metaCredits
+      }
+
+      const nextCredits = Math.max(0, currentCredits - requiredCredits)
+
+      if (creditField) {
+        const { error: creditError } = await admin
+          .from("profiles")
+          .update({ [creditField]: nextCredits })
+          .eq("id", authData.user.id)
+        if (creditError) {
+          console.error("Failed to update credits", creditError)
+        }
+      } else {
+        const { error: creditError } = await admin
+          .from("profiles")
+          .upsert({ id: authData.user.id, credits: nextCredits }, { onConflict: "id" })
+        if (creditError) {
+          console.error("Failed to upsert credits", creditError)
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Unexpected credit update error", error)
   }
 
   return NextResponse.json({ imageUrl, imageUrls, text })

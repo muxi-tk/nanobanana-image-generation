@@ -1,0 +1,89 @@
+"use client"
+
+import { Suspense } from "react"
+import { PricingPlans } from "@/components/pricing-plans"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { useI18n } from "@/components/i18n-provider"
+
+export function PricingContent() {
+  const { locale } = useI18n()
+  const copy =
+    locale === "zh"
+      ? {
+          loading: "正在加载套餐...",
+          faqTitle: "常见问题解答",
+          faqs: [
+            {
+              question: "如何计费？",
+              answer: "选择套餐后完成支付即可开通订阅，可随时在账户中调整或取消。",
+            },
+            {
+              question: "可以升级或降级吗？",
+              answer: "支持随时调整，升级即时生效，降级在下个周期生效。",
+            },
+            {
+              question: "支持哪些支付方式？",
+              answer: "支持主流银行卡及部分本地支付方式，税费将在结账时显示。",
+            },
+            {
+              question: "退款政策是什么？",
+              answer: "购买后 7 天内且使用额度低于 30% 可申请退款。",
+            },
+          ],
+        }
+      : {
+          loading: "Loading plans...",
+          faqTitle: "FAQ",
+          faqs: [
+            {
+              question: "How does billing work?",
+              answer:
+                "Choose a plan, complete checkout, and your subscription activates immediately. You can change or cancel at any time.",
+            },
+            {
+              question: "Can I switch plans later?",
+              answer: "Upgrades take effect immediately; downgrades apply next billing cycle.",
+            },
+            {
+              question: "Which payment methods are supported?",
+              answer: "Major cards and local methods are supported where available. Taxes are shown at checkout.",
+            },
+            {
+              question: "What is the refund policy?",
+              answer: "Refunds are available within 7 days if used credits are under 30% of the plan total.",
+            },
+          ],
+        }
+
+  return (
+    <>
+      <section id="plans" className="container mx-auto max-w-6xl px-4 pb-12 pt-8">
+        <Suspense fallback={<div className="py-6 text-center text-sm text-muted-foreground">{copy.loading}</div>}>
+          <PricingPlans />
+        </Suspense>
+      </section>
+
+      <section id="faq" className="bg-background py-16 sm:py-20">
+        <div className="container mx-auto max-w-5xl px-4">
+          <div className="mx-auto max-w-3xl">
+            <div className="text-center mb-10">
+              <h3 className="text-3xl font-bold tracking-tight sm:text-4xl">{copy.faqTitle}</h3>
+            </div>
+            <Accordion type="single" collapsible className="w-full space-y-2">
+              {copy.faqs.map((faq, index) => (
+                <AccordionItem
+                  key={`${faq.question}-${index}`}
+                  value={`pricing-faq-${index}`}
+                  className="border border-border/50 rounded-lg px-3 bg-background/60 last:border-b"
+                >
+                  <AccordionTrigger className="text-left text-base font-semibold">{faq.question}</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed">{faq.answer}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </div>
+      </section>
+    </>
+  )
+}

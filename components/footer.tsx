@@ -1,10 +1,29 @@
+"use client"
+
 import Link from "next/link"
 import { siteConfig } from "@/lib/site"
+import { useI18n } from "@/components/i18n-provider"
 
 export function Footer() {
-  const supportEmail = siteConfig.supportEmail || "support@nanobananaimg.online"
-  const supportEmailLabel = siteConfig.supportEmail || "support@nanobananaimg.online"
-  const supportHours = siteConfig.supportHours
+  const { locale } = useI18n()
+  const copy =
+    locale === "zh"
+      ? {
+          rights: "© 2026 nanobananaimg.online. 保留所有权利。",
+          disclaimer: "独立产品，与 Google 或 AI 模型提供方无关联。",
+          privacy: "隐私政策",
+          terms: "服务条款",
+          refund: "退款政策",
+          refundApp: "退款申请",
+        }
+      : {
+          rights: "© 2026 nanobananaimg.online. All rights reserved.",
+          disclaimer: "Independent product. Not affiliated with Google or AI model providers.",
+          privacy: "Privacy Policy",
+          terms: "Terms of Service",
+          refund: "Refund Policy",
+          refundApp: "Refund Application",
+        }
   const companyName = siteConfig.companyName
   const companyAddress = siteConfig.companyAddress
   const companyRegistration = siteConfig.companyRegistration
@@ -13,23 +32,23 @@ export function Footer() {
     <footer className="border-t border-border py-12">
       <div className="mx-auto px-4 max-w-7xl">
         <div className="text-center text-sm text-muted-foreground space-y-2">
-          <p>© 2026 nanobananaimg.online. All rights reserved.</p>
-          <p>Independent product. Not affiliated with Google or AI model providers.</p>
+          <p>{copy.rights}</p>
+          <p>{copy.disclaimer}</p>
           {companyName ? <p>{companyName}</p> : null}
           {companyAddress ? <p>{companyAddress}</p> : null}
           {companyRegistration ? <p>{companyRegistration}</p> : null}
           <div className="flex flex-wrap items-center justify-center gap-4 text-sm">
             <Link href="/privacy" className="hover:text-foreground transition-colors">
-              Privacy Policy
+              {copy.privacy}
             </Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">
-              Terms of Service
+              {copy.terms}
             </Link>
             <Link href="/refund" className="hover:text-foreground transition-colors">
-              Refund Policy
+              {copy.refund}
             </Link>
             <Link href="/refund-application" className="hover:text-foreground transition-colors">
-              Refund Application
+              {copy.refundApp}
             </Link>
           </div>
         </div>

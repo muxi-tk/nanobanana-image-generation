@@ -24,3 +24,32 @@ export async function GET() {
 
   return NextResponse.json({ items: data ?? [] })
 }
+
+export async function DELETE(request: Request) {
+  const supabase = await createClient()
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !authData?.user) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get("id")
+
+  if (!id) {
+    return NextResponse.json({ error: "Missing history id." }, { status: 400 })
+  }
+
+  const { error } = await supabase
+    .from("image_history")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", authData.user.id)
+
+  if (error) {
+    console.error("Failed to delete history item", error)
+    return NextResponse.json({ error: "Failed to delete history item." }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}

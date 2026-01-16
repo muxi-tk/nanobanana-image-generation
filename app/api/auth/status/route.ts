@@ -32,11 +32,12 @@ export async function GET() {
   )
 
   let isProMember = hasProPlan || hasProFlag
+  let creditsValue: number | null = null
 
   if (!isProMember) {
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("is_pro, plan, tier, subscription_status")
+      .select("*")
       .eq("id", user.id)
       .maybeSingle()
 
@@ -45,8 +46,62 @@ export async function GET() {
       const profileActive = `${profile.subscription_status ?? ""}`.toLowerCase() === "active"
       isProMember =
         Boolean(profile.is_pro) || profileActive || ["pro", "team", "enterprise", "studio", "vip"].includes(profilePlan)
+      const profileCredits = Number(
+        profile.credits ??
+          profile.credit_balance ??
+          profile.balance ??
+          profile.credit ??
+          profile.remaining_credits ??
+          profile.available_credits
+      )
+      if (!Number.isNaN(profileCredits)) {
+        creditsValue = profileCredits
+      }
     }
   }
 
-  return NextResponse.json({ ok: true, userId: user.id, isProMember })
+  if (creditsValue === null) {
+    const nowIso = new Date().toISOString()
+    const { data: grants, error: grantsError } = await supabase
+      .from("credit_grants")
+      .select("source, credits_remaining, expires_at")
+      .eq("user_id", user.id)
+      .gt("credits_remaining", 0)
+
+    if (!grantsError && Array.isArray(grants)) {
+      let subscriptionCredits = 0
+      let packCredits = 0
+      grants.forEach((grant) => {
+        if (grant.source === "subscription") {
+          if (!grant.expires_at || grant.expires_at > nowIso) {
+            subscriptionCredits += grant.credits_remaining
+          }
+        } else if (grant.source === "credit-pack") {
+          packCredits += grant.credits_remaining
+        }
+      })
+      const totalCredits = subscriptionCredits + packCredits
+      if (totalCredits > 0) {
+        creditsValue = totalCredits
+        if (subscriptionCredits > 0) {
+          isProMember = true
+        }
+      }
+    }
+  }
+
+  if (creditsValue === null) {
+    const metaCredits = Number(
+      meta.credits ?? meta.credit_balance ?? meta.balance ?? meta.credit ?? meta.remaining_credits ?? meta.available_credits
+    )
+    if (!Number.isNaN(metaCredits)) {
+      creditsValue = metaCredits
+    }
+  }
+
+  if (creditsValue === null) {
+    creditsValue = 10
+  }
+
+  return NextResponse.json({ ok: true, userId: user.id, isProMember, credits: creditsValue })
 }
