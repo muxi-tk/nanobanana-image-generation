@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
@@ -107,6 +107,9 @@ export function ImageGenerator() {
   const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; url: string; sizeLabel: string }>>([])
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null)
   const [generatedImages, setGeneratedImages] = useState<string[]>([])
+  const [historyId, setHistoryId] = useState<string | null>(null)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [shareLoading, setShareLoading] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -183,8 +186,12 @@ export function ImageGenerator() {
           downloadImage: "下载图片",
           share: "分享",
           shareTo: "分享至",
-          wechatSoon: "微信（即将上线）",
-          xhsSoon: "小红书（即将上线）",
+          shareX: "X",
+          shareFacebook: "Facebook",
+          shareLinkedin: "LinkedIn",
+          shareCopyLink: "复制链接",
+          shareText: "由 Nano Banana 生成",
+          sharePopupBlocked: "请允许浏览器打开新窗口后再试。",
           editAgain: "再次生成",
           generatedAlt: (index: number) => `生成结果 ${index + 1}`,
           progressLabel: (value: number) => `${value}%`,
@@ -265,8 +272,12 @@ export function ImageGenerator() {
           downloadImage: "Download Image",
           share: "Share",
           shareTo: "Share to",
-          wechatSoon: "WeChat (coming soon)",
-          xhsSoon: "XiaoHongShu (coming soon)",
+          shareX: "X",
+          shareFacebook: "Facebook",
+          shareLinkedin: "LinkedIn",
+          shareCopyLink: "Copy link",
+          shareText: "Generated with Nano Banana",
+          sharePopupBlocked: "Please allow pop-ups to open the share window.",
           editAgain: "Generate Again",
           generatedAlt: (index: number) => `Generated ${index + 1}`,
           progressLabel: (value: number) => `${value}%`,
@@ -300,6 +311,102 @@ export function ImageGenerator() {
       : selectedModel === "nano-banana-pro"
         ? 14
         : Math.max(0, Math.min(14, 15 - safeImageCount))
+  useEffect(() => {
+    setShareUrl(null)
+  }, [generatedImageUrl, historyId])
+
+  const shareLinks = useMemo(() => {
+    if (!shareUrl) {
+      return null
+    }
+    const encodedUrl = encodeURIComponent(shareUrl)
+    const encodedText = encodeURIComponent(copy.shareText)
+    return {
+      x: `https://x.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+    }
+  }, [copy.shareText, shareUrl])
+
+  const ensureShareUrl = async () => {
+    if (shareUrl) {
+      return shareUrl
+    }
+    if (!historyId || !generatedImageUrl) {
+      return null
+    }
+    setShareLoading(true)
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ historyId, imageUrl: generatedImageUrl }),
+      })
+      const data = (await res.json().catch(() => null)) as { shareId?: string } | null
+      if (!res.ok || !data?.shareId) {
+        return null
+      }
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+      const nextUrl = `${origin.replace(/\/$/, "")}/share/${data.shareId}`
+      setShareUrl(nextUrl)
+      return nextUrl
+    } catch (err) {
+      console.error("Failed to create share link", err)
+      return null
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  const handleShareClick = async (platform: "x" | "facebook" | "linkedin") => {
+    if (!generatedImageUrl) {
+      return
+    }
+    const pendingWindow = window.open("", "_blank", "noopener,noreferrer")
+    if (!pendingWindow) {
+      setError(copy.sharePopupBlocked)
+      return
+    }
+    const url = await ensureShareUrl()
+    if (!url) {
+      pendingWindow?.close()
+      return
+    }
+    const targetUrl = shareLinks
+      ? shareLinks[platform]
+      : platform === "x"
+        ? `https://x.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(copy.shareText)}`
+        : platform === "facebook"
+          ? `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`
+          : `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`
+    if (pendingWindow) {
+      pendingWindow.location.href = targetUrl
+    }
+  }
+
+  const handleCopyShareLink = async () => {
+    const url = await ensureShareUrl()
+    if (!url) {
+      return
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+      } else {
+        const textarea = document.createElement("textarea")
+        textarea.value = url
+        textarea.style.position = "fixed"
+        textarea.style.opacity = "0"
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand("copy")
+        document.body.removeChild(textarea)
+      }
+    } catch (err) {
+      console.error("Failed to copy share link", err)
+    }
+  }
 
   const clearProgressInterval = () => {
     if (progressIntervalRef.current !== null) {
@@ -619,6 +726,8 @@ export function ImageGenerator() {
 
     setError(null)
     setIsGenerating(true)
+    setShareUrl(null)
+    setHistoryId(null)
 
     const nextUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
 
@@ -681,7 +790,7 @@ export function ImageGenerator() {
         signal: controller.signal,
       }).finally(() => window.clearTimeout(timeout))
       const data = (await res.json().catch(() => null)) as
-        | { imageUrl?: string; imageUrls?: string[]; error?: string }
+        | { imageUrl?: string; imageUrls?: string[]; error?: string; historyId?: string | null }
         | null
 
       if (res.status === 401) {
@@ -714,6 +823,7 @@ export function ImageGenerator() {
 
       setGeneratedImages(images)
       setGeneratedImageUrl(images[0])
+      setHistoryId(typeof data?.historyId === "string" ? data.historyId : null)
       setProgress(100)
       if (typeof availableCredits === "number") {
         refreshCredits(Math.max(0, availableCredits - required))
@@ -1068,11 +1178,42 @@ export function ImageGenerator() {
                         <DropdownMenuContent align="center" className="w-48">
                           <DropdownMenuLabel>{copy.shareTo}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                            {copy.wechatSoon}
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              void handleShareClick("x")
+                            }}
+                            disabled={shareLoading || !historyId}
+                          >
+                            {copy.shareX}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                            {copy.xhsSoon}
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              void handleShareClick("facebook")
+                            }}
+                            disabled={shareLoading || !historyId}
+                          >
+                            {copy.shareFacebook}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              void handleShareClick("linkedin")
+                            }}
+                            disabled={shareLoading || !historyId}
+                          >
+                            {copy.shareLinkedin}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              void handleCopyShareLink()
+                            }}
+                            disabled={shareLoading || !historyId}
+                          >
+                            {copy.shareCopyLink}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

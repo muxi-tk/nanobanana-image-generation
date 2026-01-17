@@ -47,13 +47,13 @@ export function LoginContent({ nextUrl }: LoginContentProps) {
 
         <p className="mt-8 text-center text-xs text-muted-foreground">
           {copy.termsPrefix}{" "}
-          <a href="#" className="underline underline-offset-4">
+          <Link href="/terms" className="underline underline-offset-4">
             {copy.terms}
-          </a>{" "}
+          </Link>{" "}
           {locale === "zh" ? "和" : "and"}{" "}
-          <a href="#" className="underline underline-offset-4">
+          <Link href="/privacy" className="underline underline-offset-4">
             {copy.privacy}
-          </a>
+          </Link>
           .
         </p>
       </div>

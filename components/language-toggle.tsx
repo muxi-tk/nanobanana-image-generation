@@ -1,16 +1,14 @@
 "use client"
 
 import { Globe } from "lucide-react"
-import { useId } from "react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/components/i18n-provider"
 
 export function LanguageToggle() {
   const { locale, setLocale, t } = useI18n()
-  const dropdownId = useId()
-  const triggerId = `${dropdownId}-language-trigger`
-  const contentId = `${dropdownId}-language-content`
+  const triggerId = "language-toggle-trigger"
+  const contentId = "language-toggle-content"
 
   return (
     <DropdownMenu>

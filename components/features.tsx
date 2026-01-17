@@ -70,7 +70,7 @@ export function Features() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 gap-6">
           {copy.items.map((feature, index) => (
             <Card key={index} className="p-6 hover:shadow-lg transition-shadow">
               <feature.icon className="h-10 w-10 text-primary mb-4" />

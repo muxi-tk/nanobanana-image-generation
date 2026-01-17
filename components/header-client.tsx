@@ -19,7 +19,7 @@ import { useI18n } from "@/components/i18n-provider"
 import { cn } from "@/lib/utils"
 import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import { BadgeCheck, Coins, CreditCard, History, LogOut } from "lucide-react"
-import { useCallback, useEffect, useId, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 type HeaderClientProps = {
   avatarUrl: string | null
@@ -46,9 +46,8 @@ export function HeaderClient({
   const [plan, setPlan] = useState<string | null>(null)
   const [hasCreditPack, setHasCreditPack] = useState(false)
   const [hash, setHash] = useState("")
-  const menuId = useId()
-  const menuTriggerId = `${menuId}-user-trigger`
-  const menuContentId = `${menuId}-user-content`
+  const menuTriggerId = "user-menu-trigger"
+  const menuContentId = "user-menu-content"
   const initials = useMemo(() => {
     const base = (displayName || email || "").trim()
     if (!base) {

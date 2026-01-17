@@ -9,38 +9,38 @@ export function Testimonials() {
   const copy =
     locale === "zh"
       ? {
-          title: "为什么团队选择 Nano Banana",
-          subtitle: "聚焦真实工作流的核心亮点",
+          title: "产品功能亮点",
+          subtitle: "围绕实际创作流程的核心能力",
           items: [
             {
-              title: "角色一致编辑",
+              title: "角色一致性",
               description: "在多次迭代与变体中保持面部与服饰一致。",
             },
             {
-              title: "场景感知更新",
+              title: "场景感知编辑",
               description: "在保留原始语境的同时调整背景或构图。",
             },
             {
-              title: "生产友好流程",
-              description: "批量修改、提示词复用与快速重渲，适合创意团队。",
+              title: "高效创作流程",
+              description: "批量修改、提示词复用与快速重渲，适合高频创作。",
             },
           ],
         }
       : {
-          title: "Why teams use Nano Banana",
-          subtitle: "Highlights focused on real workflows",
+          title: "Product highlights",
+          subtitle: "Capabilities built for real creative workflows",
           items: [
             {
               title: "Consistent character edits",
               description: "Keep facial features and wardrobe aligned across iterations and variants.",
             },
             {
-              title: "Scene-aware updates",
+              title: "Scene-aware edits",
               description: "Edit backgrounds or compositions while preserving the original context.",
             },
             {
-              title: "Production-friendly workflow",
-              description: "Batch revisions, prompt reuse, and quick re-renders for creative teams.",
+              title: "Efficient workflows",
+              description: "Batch revisions, prompt reuse, and quick re-renders for fast iteration.",
             },
           ],
         }

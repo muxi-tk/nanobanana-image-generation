@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useState } from "react"
+import { useEffect, useState } from "react"
 import { Monitor, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
@@ -11,9 +11,8 @@ export function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme()
   const { t } = useI18n()
   const [mounted, setMounted] = useState(false)
-  const dropdownId = useId()
-  const triggerId = `${dropdownId}-theme-trigger`
-  const contentId = `${dropdownId}-theme-content`
+  const triggerId = "theme-toggle-trigger"
+  const contentId = "theme-toggle-content"
 
   useEffect(() => {
     setMounted(true)

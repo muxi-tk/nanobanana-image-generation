@@ -7,7 +7,7 @@ import { useI18n } from "@/components/i18n-provider"
 
 export function SupportContent() {
   const { locale } = useI18n()
-  const supportEmail = siteConfig.supportEmail || "support@yourdomain.com"
+  const supportEmail = siteConfig.supportEmail || "support@nanobananaimg.online"
   const copy =
     locale === "zh"
       ? {
@@ -24,7 +24,7 @@ export function SupportContent() {
           companyOperator: "运营主体：",
           companyAddress: "地址：",
           companyRegistration: "注册信息：",
-          companyFallback: "由独立开发者运营，相关信息可应要求提供。",
+          companyFallback: "运营主体：独立开发者（中国深圳）。相关信息可通过支持邮箱索取。",
           legalPrefix: "查看我们的",
           privacy: "隐私政策",
           terms: "服务条款",
@@ -44,7 +44,8 @@ export function SupportContent() {
           companyOperator: "Operator:",
           companyAddress: "Address:",
           companyRegistration: "Registration:",
-          companyFallback: "Operated by an individual developer. Details are available upon request.",
+          companyFallback:
+            "Operated by an independent developer in Shenzhen, China. Business details are available upon request via support email.",
           legalPrefix: "Review our",
           privacy: "Privacy Policy",
           terms: "Terms of Service",

@@ -201,6 +201,8 @@ export function PricingPlans() {
           monthly: "月付",
           annual: "年付",
           perMonth: "/月",
+          perMonthYearly: "/月（按年计费）",
+          billedAnnually: (total: string) => `年付 ${total}`,
           creditsPerMonth: (credits: number) => `每月 ${credits} 积分`,
           creditsPerYear: (credits: number) => `每年 ${credits} 积分`,
           packCredits: (credits: number) => `${credits} 积分`,
@@ -216,6 +218,8 @@ export function PricingPlans() {
           monthly: "Monthly",
           annual: "Annual",
           perMonth: "/month",
+          perMonthYearly: "/month (billed annually)",
+          billedAnnually: (total: string) => `Billed ${total}/year`,
           creditsPerMonth: (credits: number) => `${credits} credits / month`,
           creditsPerYear: (credits: number) => `${credits} credits / year`,
           packCredits: (credits: number) => `${credits} credits`,
@@ -486,8 +490,15 @@ export function PricingPlans() {
                   <div className="space-y-1">
                     <div className="flex items-baseline gap-2">
                       <span className="text-4xl font-bold tracking-tight">${formatPrice(amount)}</span>
-                      <span className="text-sm text-muted-foreground">{copy.perMonth}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {isYearly ? copy.perMonthYearly : copy.perMonth}
+                      </span>
                     </div>
+                    {isYearly ? (
+                      <p className="text-xs text-muted-foreground">
+                        {copy.billedAnnually(`$${formatPrice(amount * 12)}`)}
+                      </p>
+                    ) : null}
                     {isYearly && plan.yearlyBadge ? (
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <Badge variant="secondary" className="bg-primary/15 text-primary">

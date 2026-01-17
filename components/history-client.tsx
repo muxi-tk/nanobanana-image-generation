@@ -18,6 +18,7 @@ import {
   Trash2,
   Eye,
   FileText,
+  Share2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -30,6 +31,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Sidebar,
   SidebarContent,
@@ -172,6 +181,8 @@ export function HistoryClient() {
   const [selectedImage, setSelectedImage] = useState<HistoryImage | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<HistoryImage | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [promptOpen, setPromptOpen] = useState(false)
   const [promptCopied, setPromptCopied] = useState(false)
   const { t } = useI18n()
@@ -199,6 +210,10 @@ export function HistoryClient() {
   useEffect(() => {
     setPage(1)
   }, [search, typeFilter, dateFilter])
+
+  useEffect(() => {
+    setShareUrl(null)
+  }, [selectedImage?.id, selectedImage?.url])
 
   useEffect(() => {
     let isMounted = true
@@ -339,6 +354,116 @@ export function HistoryClient() {
     } catch (err) {
       console.error("Prompt copy failed", err)
       toast({ title: t("historyPromptCopyError"), variant: "destructive" })
+    }
+  }
+
+  const shareLinks = useMemo(() => {
+    if (!shareUrl) {
+      return null
+    }
+    const encodedUrl = encodeURIComponent(shareUrl)
+    const encodedText = encodeURIComponent(t("shareText"))
+    return {
+      x: `https://x.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+    }
+  }, [shareUrl, t])
+
+  const ensureShareUrl = async () => {
+    if (shareUrl) {
+      return shareUrl
+    }
+    if (!selectedImage) {
+      return null
+    }
+    setShareLoading(true)
+    try {
+      const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ historyId: selectedImage.recordId, imageUrl: selectedImage.url }),
+      })
+      const data = (await res.json().catch(() => null)) as { shareId?: string } | null
+      if (!res.ok || !data?.shareId) {
+        throw new Error("Share request failed")
+      }
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+      const shareLink = `${origin.replace(/\/$/, "")}/share/${data.shareId}`
+      setShareUrl(shareLink)
+      return shareLink
+    } catch (err) {
+      console.error("Failed to create share link", err)
+      toast({ title: t("historyShareError"), variant: "destructive" })
+      return null
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  const handleShareClick = async (platform: "x" | "facebook" | "linkedin") => {
+    if (!selectedImage) {
+      return
+    }
+    const pendingWindow = window.open("", "_blank", "noopener,noreferrer")
+    if (!pendingWindow) {
+      toast({ title: t("sharePopupBlocked"), variant: "destructive" })
+      return
+    }
+    const url = await ensureShareUrl()
+    if (!url) {
+      pendingWindow?.close()
+      return
+    }
+    const targetUrl = shareLinks
+      ? shareLinks[platform]
+      : platform === "x"
+        ? `https://x.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(t("shareText"))}`
+        : platform === "facebook"
+          ? `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`
+          : `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`
+    if (pendingWindow) {
+      pendingWindow.location.href = targetUrl
+    }
+  }
+
+  const handleCopyShareLink = async () => {
+    const url = await ensureShareUrl()
+    if (!url) {
+      return
+    }
+    try {
+      if (!document.hasFocus()) {
+        window.focus()
+      }
+      let copied = false
+      if (navigator.clipboard?.writeText && document.hasFocus()) {
+        try {
+          await navigator.clipboard.writeText(url)
+          copied = true
+        } catch (err) {
+          console.warn("Clipboard write failed", err)
+        }
+      }
+      if (!copied) {
+        const textarea = document.createElement("textarea")
+        textarea.value = url
+        textarea.style.position = "fixed"
+        textarea.style.opacity = "0"
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        copied = document.execCommand("copy")
+        document.body.removeChild(textarea)
+      }
+      if (copied) {
+        toast({ title: t("historyShareCopied") })
+      } else {
+        toast({ title: t("historyShareCopyError"), variant: "destructive" })
+      }
+    } catch (err) {
+      console.error("Failed to copy share link", err)
+      toast({ title: t("historyShareCopyError"), variant: "destructive" })
     }
   }
 
@@ -721,6 +846,59 @@ export function HistoryClient() {
                     <FileText className="h-4 w-4" />
                     {t("historyPromptFull")}
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        className="bg-primary text-primary-foreground hover:bg-primary/90"
+                        disabled={shareLoading}
+                      >
+                        <Share2 className="h-4 w-4" />
+                        {t("historyShare")}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="w-48">
+                      <DropdownMenuLabel>{t("shareTo")}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          void handleShareClick("x")
+                        }}
+                        disabled={shareLoading}
+                      >
+                        {t("shareX")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          void handleShareClick("facebook")
+                        }}
+                        disabled={shareLoading}
+                      >
+                        {t("shareFacebook")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          void handleShareClick("linkedin")
+                        }}
+                        disabled={shareLoading}
+                      >
+                        {t("shareLinkedin")}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={(event) => {
+                          event.preventDefault()
+                          void handleCopyShareLink()
+                        }}
+                        disabled={shareLoading}
+                      >
+                        {t("shareCopyLink")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                     onClick={() => setDeleteTarget(selectedImage)}

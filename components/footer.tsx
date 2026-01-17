@@ -10,13 +10,14 @@ export function Footer() {
     locale === "zh"
       ? {
           rights: "© 2026 nanobananaimg.online. 保留所有权利。",
-          disclaimer: "独立产品，与 Google 或 AI 模型提供方无关联。",
+          disclaimer: "独立产品，基于第三方 AI 模型的自定义界面，与模型提供方无关联。",
           privacy: "隐私政策",
           terms: "服务条款",
         }
       : {
           rights: "© 2026 nanobananaimg.online. All rights reserved.",
-          disclaimer: "Independent product. Not affiliated with Google or AI model providers.",
+          disclaimer:
+            "Independent product providing a custom interface to third-party AI models. Not affiliated with model providers.",
           privacy: "Privacy Policy",
           terms: "Terms of Service",
         }

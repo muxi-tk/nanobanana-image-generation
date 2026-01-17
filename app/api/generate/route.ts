@@ -302,25 +302,32 @@ export async function POST(request: Request) {
           : 10
   const requiredCredits = perImageCredits * creditMultiplier
 
+  let historyId: string | null = null
   if (imagesToStore.length) {
     try {
       const hasUploadedImages = imageDataUrls.length > 0 || Boolean(imageDataUrl)
       const storedGenerationMode = hasUploadedImages ? "image-to-image" : "text-to-image"
-      const { error: historyError } = await supabase.from("image_history").insert({
-        user_id: authData.user.id,
-        prompt,
-        image_urls: imagesToStore,
-        model: selectedModel,
-        aspect_ratio: aspectRatio,
-        resolution,
-        output_format: outputFormat,
-        generation_mode: storedGenerationMode,
-        credits_per_image: perImageCredits,
-        credits_total: requiredCredits,
-        image_count: creditMultiplier,
-      })
+      const { data: historyRecord, error: historyError } = await supabase
+        .from("image_history")
+        .insert({
+          user_id: authData.user.id,
+          prompt,
+          image_urls: imagesToStore,
+          model: selectedModel,
+          aspect_ratio: aspectRatio,
+          resolution,
+          output_format: outputFormat,
+          generation_mode: storedGenerationMode,
+          credits_per_image: perImageCredits,
+          credits_total: requiredCredits,
+          image_count: creditMultiplier,
+        })
+        .select("id")
+        .single()
       if (historyError) {
         console.error("Failed to store image history", historyError)
+      } else {
+        historyId = historyRecord?.id ?? null
       }
     } catch (error) {
       console.error("Unexpected history storage error", error)
@@ -435,5 +442,5 @@ export async function POST(request: Request) {
     console.error("Unexpected credit update error", error)
   }
 
-  return NextResponse.json({ imageUrl, imageUrls, text })
+  return NextResponse.json({ imageUrl, imageUrls, text, historyId })
 }

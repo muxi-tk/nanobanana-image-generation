@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useI18n } from "@/components/i18n-provider"
+import { siteConfig } from "@/lib/site"
 
 type PlanSnapshot = {
   plan?: string | null
@@ -30,6 +31,7 @@ export function PlanContent() {
   const { t } = useI18n()
   const [snapshot, setSnapshot] = useState<PlanSnapshot | null>(null)
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
+  const supportEmail = siteConfig.supportEmail || "support@nanobananaimg.online"
 
   useEffect(() => {
     let isMounted = true
@@ -83,7 +85,7 @@ export function PlanContent() {
   }, [planKey, t])
   const cycleLabel =
     cycleKey === "yearly" ? t("planCycleYearly") : cycleKey === "monthly" ? t("planCycleMonthly") : "-"
-  const allowSelfManage = Boolean(portalUrl && planKey && planKey !== "starter")
+  const allowSelfManage = Boolean(portalUrl && planKey)
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-12">
@@ -122,6 +124,12 @@ export function PlanContent() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("planCycleLabel")}</p>
               <p className="mt-1 text-sm font-medium">{cycleLabel}</p>
             </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {t("supportEmailLabel")}{" "}
+            <a href={`mailto:${supportEmail}`} className="text-foreground hover:underline">
+              {supportEmail}
+            </a>
           </div>
         </CardContent>
       </Card>
