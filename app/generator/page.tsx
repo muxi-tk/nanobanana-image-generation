@@ -4,7 +4,7 @@ import { GeneratorShell } from "@/components/generator-shell"
 export default function GeneratorPage() {
   return (
     <>
-      <Header />
+      <Header withSidebar />
       <GeneratorShell />
     </>
   )

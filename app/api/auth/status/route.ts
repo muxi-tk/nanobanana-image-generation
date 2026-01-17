@@ -19,6 +19,10 @@ export async function GET() {
 
   const planValue = (meta.plan ?? meta.tier ?? meta.subscription ?? "") as string
   const planNormalized = planValue.toString().toLowerCase()
+  const cycleValue = (meta.cycle ?? meta.billing_cycle ?? "") as string
+  const cycleNormalized = cycleValue.toString().toLowerCase()
+  const statusValue = (meta.subscription_status ?? meta.status ?? "") as string
+  const statusNormalized = statusValue.toString().toLowerCase()
   const hasProPlan = ["pro", "team", "enterprise", "studio", "vip"].includes(planNormalized)
 
   const hasProFlag = Boolean(
@@ -33,6 +37,7 @@ export async function GET() {
 
   let isProMember = hasProPlan || hasProFlag
   let creditsValue: number | null = null
+  let hasCreditPack = false
 
   if (!isProMember) {
     const { data: profile, error: profileError } = await supabase
@@ -80,6 +85,7 @@ export async function GET() {
           packCredits += grant.credits_remaining
         }
       })
+      hasCreditPack = packCredits > 0
       const totalCredits = subscriptionCredits + packCredits
       if (totalCredits > 0) {
         creditsValue = totalCredits
@@ -87,6 +93,18 @@ export async function GET() {
           isProMember = true
         }
       }
+    }
+  }
+  if (!hasCreditPack) {
+    const { data: packGrants, error: packError } = await supabase
+      .from("credit_grants")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("source", "credit-pack")
+      .gt("credits_remaining", 0)
+      .limit(1)
+    if (!packError && Array.isArray(packGrants) && packGrants.length > 0) {
+      hasCreditPack = true
     }
   }
 
@@ -103,5 +121,14 @@ export async function GET() {
     creditsValue = 10
   }
 
-  return NextResponse.json({ ok: true, userId: user.id, isProMember, credits: creditsValue })
+  return NextResponse.json({
+    ok: true,
+    userId: user.id,
+    isProMember,
+    credits: creditsValue,
+    plan: planNormalized || null,
+    cycle: cycleNormalized || null,
+    subscriptionStatus: statusNormalized || null,
+    hasCreditPack,
+  })
 }

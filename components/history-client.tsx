@@ -5,8 +5,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
   Download,
   History,
+  PanelLeftIcon,
   Sparkles,
   LayoutGrid,
   List,
@@ -37,6 +41,7 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import { Logo } from "@/components/logo"
@@ -53,6 +58,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 type HistoryRecord = {
   id: string
@@ -64,6 +70,9 @@ type HistoryRecord = {
   resolution: string | null
   output_format: string | null
   generation_mode: string | null
+  credits_per_image?: number | null
+  credits_total?: number | null
+  image_count?: number | null
 }
 
 type HistoryImage = {
@@ -77,6 +86,7 @@ type HistoryImage = {
   resolution?: string | null
   aspectRatio?: string | null
   outputFormat?: string | null
+  creditsPerImage?: number | null
 }
 
 const modelLabels: Record<string, string> = {
@@ -105,6 +115,48 @@ const normalizeGenerationMode = (value: string | null | undefined) => {
   return normalized
 }
 
+function SidebarLogoToggle() {
+  const { toggleSidebar, state } = useSidebar()
+  const isCollapsed = state === "collapsed"
+  const tooltipHidden = !isCollapsed
+  const tooltip = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="relative inline-flex size-8 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground"
+          aria-label="Toggle Sidebar"
+        >
+          <Logo className="absolute inset-0 m-auto h-4 w-4 text-foreground transition-opacity group-data-[collapsible=icon]:block group-data-[collapsible=icon]:group-hover:opacity-0" />
+          <PanelLeftIcon className="absolute inset-0 m-auto hidden h-4 w-4 text-foreground opacity-0 transition-opacity group-data-[collapsible=icon]:block group-data-[collapsible=icon]:group-hover:opacity-100" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center" hidden={tooltipHidden}>
+        打开边栏
+      </TooltipContent>
+    </Tooltip>
+  )
+  if (!isCollapsed) {
+    return (
+      <>
+        <div className="flex items-center">
+          <Logo className="h-4 w-4 text-foreground" />
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SidebarTrigger className="inline-flex" />
+          </TooltipTrigger>
+          <TooltipContent side="right" align="center">
+            关闭边栏
+          </TooltipContent>
+        </Tooltip>
+      </>
+    )
+  }
+  return tooltip
+}
+
 export function HistoryClient() {
   const pathname = usePathname()
   const [items, setItems] = useState<HistoryRecord[]>([])
@@ -114,6 +166,9 @@ export function HistoryClient() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [total, setTotal] = useState(0)
   const [selectedImage, setSelectedImage] = useState<HistoryImage | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<HistoryImage | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -142,33 +197,73 @@ export function HistoryClient() {
   }
 
   useEffect(() => {
+    setPage(1)
+  }, [search, typeFilter, dateFilter])
+
+  useEffect(() => {
+    let isMounted = true
+    const controller = new AbortController()
     const fetchHistory = async () => {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch("/api/history", { cache: "no-store" })
+        const params = new URLSearchParams()
+        if (search.trim()) {
+          params.set("q", search.trim())
+        }
+        if (typeFilter !== "all") {
+          params.set("type", typeFilter)
+        }
+        if (dateFilter !== "all") {
+          params.set("date", dateFilter)
+        }
+        params.set("page", page.toString())
+        params.set("page_size", pageSize.toString())
+        const res = await fetch(`/api/history?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        })
         if (res.status === 401) {
+          if (!isMounted) return
           setItems([])
+          setTotal(0)
           setError(t("historyUnauthorized"))
           return
         }
         if (!res.ok) {
+          if (!isMounted) return
           setError(t("historyError"))
           setItems([])
+          setTotal(0)
           return
         }
-        const data = (await res.json().catch(() => null)) as { items?: HistoryRecord[] } | null
+        const data = (await res.json().catch(() => null)) as
+          | { items?: HistoryRecord[]; total?: number }
+          | null
+        if (!isMounted) return
         setItems(Array.isArray(data?.items) ? data.items : [])
+        setTotal(typeof data?.total === "number" ? data.total : 0)
       } catch (err) {
+        if ((err as Error)?.name === "AbortError") {
+          return
+        }
         console.error("History fetch failed", err)
+        if (!isMounted) return
         setError(t("historyError"))
       } finally {
-        setLoading(false)
+        if (isMounted) {
+          setLoading(false)
+        }
       }
     }
 
-    fetchHistory()
-  }, [t])
+    const timeoutId = setTimeout(fetchHistory, 250)
+    return () => {
+      isMounted = false
+      controller.abort()
+      clearTimeout(timeoutId)
+    }
+  }, [dateFilter, page, pageSize, search, t, typeFilter])
 
   const flattened = useMemo<HistoryImage[]>(() => {
     return items.flatMap((item) => {
@@ -184,46 +279,15 @@ export function HistoryClient() {
         resolution: item.resolution,
         aspectRatio: item.aspect_ratio,
         outputFormat: item.output_format,
+        creditsPerImage: item.credits_per_image ?? null,
       }))
     })
   }, [items])
-
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    const now = Date.now()
-    const cutoffDays =
-      dateFilter === "7"
-        ? 7
-        : dateFilter === "30"
-          ? 30
-          : null
-
-    const baseFiltered = flattened.filter((item) => {
-      if (query && !item.prompt.toLowerCase().includes(query)) {
-        return false
-      }
-      if (cutoffDays) {
-        const created = new Date(item.createdAt).getTime()
-        if (Number.isNaN(created)) {
-          return false
-        }
-        const deltaDays = (now - created) / (1000 * 60 * 60 * 24)
-        if (deltaDays > cutoffDays) {
-          return false
-        }
-      }
-      return true
-    })
-
-    if (typeFilter === "all") {
-      return baseFiltered
-    }
-
-    const normalizedFilter = normalizeGenerationMode(typeFilter)
-    return baseFiltered.filter(
-      (item) => normalizeGenerationMode(item.generationMode) === normalizedFilter
-    )
-  }, [dateFilter, flattened, search, typeFilter])
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const pageOptions = useMemo(
+    () => Array.from({ length: totalPages }, (_, index) => `${index + 1}`),
+    [totalPages]
+  )
 
   const handleDelete = async () => {
     if (!deleteTarget) {
@@ -282,27 +346,20 @@ export function HistoryClient() {
     <SidebarProvider defaultOpen>
       <Sidebar
         collapsible="icon"
-        className="border-border/60 bg-sidebar/60 top-16 h-[calc(100svh-4rem)]"
+        className="border-border/60 bg-sidebar/60 top-16 h-[calc(100svh-4rem)] group"
       >
         <SidebarHeader className="border-sidebar-border gap-4 border-b px-4 py-4 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3">
           <div className="flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center">
-            <Link href="/" className="flex items-center gap-3">
-              <Logo className="h-8 w-8 text-foreground" />
-              <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="text-sm font-semibold">Nano Banana</span>
-                <span className="text-xs text-muted-foreground">{t("aiGenerator")}</span>
-              </div>
-            </Link>
-            <SidebarTrigger className="inline-flex" />
+            <SidebarLogoToggle />
           </div>
         </SidebarHeader>
-        <SidebarContent className="px-3 py-4">
+        <SidebarContent className="px-3 py-4 group-data-[collapsible=icon]:px-2">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 tooltip={t("generateImage")}
                 isActive={pathname === "/generator"}
-                className="sidebar-ripple group"
+                className="sidebar-ripple group group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:[&>span]:hidden"
                 asChild
               >
                 <Link href="/generator">
@@ -320,7 +377,7 @@ export function HistoryClient() {
               <SidebarMenuButton
                 tooltip={t("historyNav")}
                 isActive={pathname === "/history"}
-                className="sidebar-ripple group"
+                className="sidebar-ripple group group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:[&>span]:hidden"
                 asChild
               >
                 <Link href="/history">
@@ -331,6 +388,24 @@ export function HistoryClient() {
                     )}
                   />
                   <span>{t("historyNav")}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip={t("billingNav")}
+                isActive={pathname === "/billing"}
+                className="sidebar-ripple group group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:[&>span]:hidden"
+                asChild
+              >
+                <Link href="/billing">
+                  <CreditCard
+                    className={cn(
+                      "text-muted-foreground group-hover:text-sidebar-accent-foreground group-data-[active=true]:text-sidebar-accent-foreground",
+                      pathname === "/billing" && "text-sidebar-accent-foreground"
+                    )}
+                  />
+                  <span>{t("billingNav")}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -360,7 +435,7 @@ export function HistoryClient() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t("historyTypeAll")}</SelectItem>
-                        <SelectItem value="image-edit">{t("historyTypeImageEdit")}</SelectItem>
+                        <SelectItem value="image-to-image">{t("historyTypeImageEdit")}</SelectItem>
                         <SelectItem value="text-to-image">{t("historyTypeText")}</SelectItem>
                       </SelectContent>
                     </Select>
@@ -406,7 +481,7 @@ export function HistoryClient() {
                 <Card className="border-border/60 bg-background p-10 text-center text-sm text-muted-foreground">
                   {error}
                 </Card>
-              ) : filtered.length === 0 ? (
+              ) : flattened.length === 0 ? (
                 <Card className="border-border/60 bg-background p-8 shadow-sm">
                   <Empty className="border border-dashed border-border/60 bg-muted/40">
                     <EmptyHeader>
@@ -420,7 +495,7 @@ export function HistoryClient() {
                 </Card>
               ) : viewMode === "list" ? (
                 <div className="space-y-3">
-                  {filtered.map((item) => {
+                  {flattened.map((item) => {
                     const title = getPromptTitle(item.prompt, formatDate(item.createdAt))
                     const typeLabel = getDisplayGenerationLabel(item.generationMode)
                     return (
@@ -442,6 +517,11 @@ export function HistoryClient() {
                               </span>
                               {item.model ? <span>{modelLabels[item.model] ?? item.model}</span> : null}
                               {item.resolution ? <span>{item.resolution.toUpperCase()}</span> : null}
+                              {typeof item.creditsPerImage === "number" ? (
+                                <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                  {item.creditsPerImage} {t("creditsUnit")}
+                                </span>
+                              ) : null}
                               {typeLabel ? (
                                 <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                                   {typeLabel}
@@ -481,7 +561,7 @@ export function HistoryClient() {
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {filtered.map((item) => {
+                  {flattened.map((item) => {
                     const title = getPromptTitle(item.prompt, formatDate(item.createdAt))
                     const typeLabel = getDisplayGenerationLabel(item.generationMode)
                     return (
@@ -524,6 +604,11 @@ export function HistoryClient() {
                               {formatDate(item.createdAt)}
                             </span>
                             {item.model ? <span>{modelLabels[item.model] ?? item.model}</span> : null}
+                            {typeof item.creditsPerImage === "number" ? (
+                              <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                {item.creditsPerImage} {t("creditsUnit")}
+                              </span>
+                            ) : null}
                             {typeLabel ? (
                               <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                                 {typeLabel}
@@ -536,6 +621,40 @@ export function HistoryClient() {
                   })}
                 </div>
               )}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Select value={`${pageSize}`} onValueChange={(value) => setPageSize(Number.parseInt(value, 10))}>
+                  <SelectTrigger className="h-9 w-[120px] !h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 20, 30, 40, 50].map((size) => (
+                      <SelectItem key={size} value={`${size}`}>
+                        {t("historyPageSize")} {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="sr-only">{t("historyPrev")}</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={page >= totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                  <span className="sr-only">{t("historyNext")}</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -578,6 +697,11 @@ export function HistoryClient() {
                     {selectedImage.model ? (
                       <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                         {modelLabels[selectedImage.model] ?? selectedImage.model}
+                      </span>
+                    ) : null}
+                    {typeof selectedImage.creditsPerImage === "number" ? (
+                      <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {selectedImage.creditsPerImage} {t("creditsUnit")}
                       </span>
                     ) : null}
                   </div>

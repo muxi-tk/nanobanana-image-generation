@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 
 function getSiteUrl() {
@@ -10,6 +11,12 @@ function getSiteUrl() {
 
   const vercelUrl = process.env.VERCEL_URL
   if (vercelUrl) return `https://${vercelUrl}`
+
+  const headerStore = headers()
+  const forwardedHost = headerStore.get("x-forwarded-host")
+  const host = forwardedHost ?? headerStore.get("host")
+  const proto = headerStore.get("x-forwarded-proto") ?? "http"
+  if (host) return `${proto}://${host}`
 
   return "http://localhost:3000"
 }

@@ -204,15 +204,12 @@ export function PricingPlans() {
           creditsPerMonth: (credits: number) => `每月 ${credits} 积分`,
           creditsPerYear: (credits: number) => `每年 ${credits} 积分`,
           packCredits: (credits: number) => `${credits} 积分`,
-          checkoutSuccess: "支付完成！你可以关闭此页面或继续使用。",
           loginError: "无法验证登录状态，请重试。",
           startCheckoutError: "无法开始结账，请重试。",
           checkoutLinkError: "未返回结账链接，请检查配置后重试。",
-          checkoutRedirect: "正在跳转到安全支付...",
           unknownError: "未知错误，请重试。",
           authPersistError: "无法保存待处理订单数据",
           oneTime: "一次性购买 - 永久有效",
-          planLabel: "套餐",
         }
       : {
           creditPacks: "Credit Packs",
@@ -222,32 +219,20 @@ export function PricingPlans() {
           creditsPerMonth: (credits: number) => `${credits} credits / month`,
           creditsPerYear: (credits: number) => `${credits} credits / year`,
           packCredits: (credits: number) => `${credits} credits`,
-          checkoutSuccess: "Thanks! Your checkout finished successfully. You can close this tab or jump back in.",
           loginError: "Unable to verify login status. Please try again.",
           startCheckoutError: "Unable to start checkout. Please try again.",
           checkoutLinkError: "Checkout did not return a link. Check your configuration and try again.",
-          checkoutRedirect: "Redirecting to secure checkout...",
           unknownError: "Unknown error. Please try again.",
           authPersistError: "Failed to persist pending checkout data",
           oneTime: "One-time purchase - No expiry",
-          planLabel: "Plan",
         }
   const [billingView, setBillingView] = useState<BillingView>("yearly")
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
   const [loadingPack, setLoadingPack] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const status = searchParams.get("status")
-  const returnedPlan = searchParams.get("plan")
   const viewParam = searchParams.get("view")
   const cycleParam = searchParams.get("cycle")
-
-  useEffect(() => {
-    if (status === "success") {
-      setMessage(copy.checkoutSuccess)
-    }
-  }, [copy.checkoutSuccess, status])
 
   useEffect(() => {
     if (viewParam === "credit-packs") {
@@ -300,7 +285,6 @@ export function PricingPlans() {
   const startCheckout = async (plan: Plan) => {
     setError(null)
     setLoadingPlan(plan.id)
-    setMessage(null)
 
     const nextUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
 
@@ -346,7 +330,6 @@ export function PricingPlans() {
         return
       }
 
-      setMessage(copy.checkoutRedirect)
       window.location.href = data.checkoutUrl
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.unknownError)
@@ -358,7 +341,6 @@ export function PricingPlans() {
   const startPackCheckout = async (pack: CreditPack) => {
     setError(null)
     setLoadingPack(pack.id)
-    setMessage(null)
     const nextUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
 
     const authRes = await fetch("/api/auth/status", { cache: "no-store" })
@@ -401,7 +383,6 @@ export function PricingPlans() {
         return
       }
 
-      setMessage(copy.checkoutRedirect)
       window.location.href = data.checkoutUrl
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.unknownError)
@@ -463,12 +444,6 @@ export function PricingPlans() {
         
       </div>
 
-      {message ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          {message}
-          {returnedPlan ? ` (${copy.planLabel}: ${returnedPlan})` : null}
-        </div>
-      ) : null}
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}

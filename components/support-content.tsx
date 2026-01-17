@@ -25,11 +25,6 @@ export function SupportContent() {
           companyAddress: "地址：",
           companyRegistration: "注册信息：",
           companyFallback: "由独立开发者运营，相关信息可应要求提供。",
-          refundTitle: "退款政策",
-          refundPoint1: "购买后 7 天内可申请退款。",
-          refundPoint2: "已用额度需少于套餐总额度的 30%。",
-          refundPoint3: "超过该阈值后不再支持退款。",
-          refundPoint4: "请提供账号邮箱与订单信息以便审核。",
           legalPrefix: "查看我们的",
           privacy: "隐私政策",
           terms: "服务条款",
@@ -50,11 +45,6 @@ export function SupportContent() {
           companyAddress: "Address:",
           companyRegistration: "Registration:",
           companyFallback: "Operated by an individual developer. Details are available upon request.",
-          refundTitle: "Refund policy",
-          refundPoint1: "You may request a refund within 7 days of purchase.",
-          refundPoint2: "Used credits must be less than 30% of the total credits included in the plan.",
-          refundPoint3: "Refunds are not available once usage exceeds this threshold.",
-          refundPoint4: "Contact support with your account email and order details to request a review.",
           legalPrefix: "Review our",
           privacy: "Privacy Policy",
           terms: "Terms of Service",
@@ -102,16 +92,6 @@ export function SupportContent() {
           {!siteConfig.companyName && !siteConfig.companyAddress && !siteConfig.companyRegistration ? (
             <p>{copy.companyFallback}</p>
           ) : null}
-        </div>
-      </Card>
-
-      <Card className="mt-6 p-6">
-        <h2 className="text-lg font-semibold">{copy.refundTitle}</h2>
-        <div className="mt-2 space-y-2 text-sm text-muted-foreground">
-          <p>{copy.refundPoint1}</p>
-          <p>{copy.refundPoint2}</p>
-          <p>{copy.refundPoint3}</p>
-          <p>{copy.refundPoint4}</p>
         </div>
       </Card>
 

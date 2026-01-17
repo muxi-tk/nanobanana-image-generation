@@ -1,9 +1,11 @@
 "use client"
 
 import { signInWithGoogle } from "@/app/actions/auth"
+import { Logo } from "@/components/logo"
+import { useI18n } from "@/components/i18n-provider"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ChevronDown } from "lucide-react"
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { Sparkles } from "lucide-react"
 import { useEffect, useState, type SVGProps } from "react"
 
 function GoogleIcon(props: SVGProps<SVGSVGElement>) {
@@ -37,30 +39,67 @@ export function AuthMenu({
   continueWithGoogleLabel?: string
 }) {
   const [nextUrl, setNextUrl] = useState("/")
+  const { locale } = useI18n()
+  const copy =
+    locale === "zh"
+      ? {
+          title: "Nano Banana",
+          subtitle: "欢迎回来，继续你的创作",
+          trialCta: "免费试用",
+        }
+      : {
+          title: "Nano Banana",
+          subtitle: "Welcome back. Pick up where you left off.",
+          trialCta: "Start free trial",
+        }
 
   useEffect(() => {
     setNextUrl(`${window.location.pathname}${window.location.search}${window.location.hash}`)
   }, [])
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-1.5">
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
           {signInLabel}
-          <ChevronDown className="h-4 w-4" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <form>
-          <input type="hidden" name="next" value={nextUrl} />
-          <DropdownMenuItem asChild>
-            <button type="submit" formAction={signInWithGoogle} className="w-full flex items-center gap-3">
+      </DialogTrigger>
+      <DialogContent
+        className="border border-border bg-popover text-popover-foreground shadow-2xl sm:max-w-md"
+        showCloseButton
+      >
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex items-center gap-2 text-2xl font-semibold text-primary">
+            <Logo className="h-7 w-7 text-primary" />
+            <span>{copy.title}</span>
+          </div>
+          <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
+        </div>
+
+        <Button
+          type="button"
+          className="mx-auto mt-1 w-full max-w-xs rounded-full"
+          onClick={() => window.location.assign("/pricing")}
+        >
+          <Sparkles className="h-4 w-4 text-primary-foreground" />
+          {copy.trialCta}
+        </Button>
+
+        <div className="mt-4 border-t border-border pt-4">
+          <form>
+            <input type="hidden" name="next" value={nextUrl} />
+            <Button
+              type="submit"
+              formAction={signInWithGoogle}
+              variant="outline"
+              className="w-full justify-center gap-2"
+            >
               <GoogleIcon className="h-5 w-5" />
               {continueWithGoogleLabel}
-            </button>
-          </DropdownMenuItem>
-        </form>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            </Button>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

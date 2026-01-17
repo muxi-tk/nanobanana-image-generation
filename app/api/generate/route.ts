@@ -192,45 +192,89 @@ export async function POST(request: Request) {
   if (siteUrl) openRouterHeaders["HTTP-Referer"] = siteUrl
   if (siteName) openRouterHeaders["X-Title"] = siteName
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS)
   const providerConfig = undefined
-
   const messageContent = candidateImages.length ? contentParts : finalPrompt
-  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: openRouterHeaders,
-    body: JSON.stringify({
-      model: MODEL_MAP[selectedModel] ?? MODEL_MAP["nano-banana"],
-      modalities: ["image", "text"],
-      n: imageCount > 1 ? imageCount : undefined,
-      provider: providerConfig,
-      messages: [
-        {
-          role: "user",
-          content: messageContent,
-        },
-      ],
-    }),
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout))
+  const modelName = MODEL_MAP[selectedModel] ?? MODEL_MAP["nano-banana"]
 
-  const result = await response.json().catch(() => null)
-  if (!response.ok) {
-    const message =
-      result?.error?.message ||
-      result?.error ||
-      `OpenRouter request failed (${response.status}).`
-    return NextResponse.json({ error: message, details: result }, { status: response.status })
+  const requestOnce = async (count?: number) => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS)
+    try {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: openRouterHeaders,
+        body: JSON.stringify({
+          model: modelName,
+          modalities: ["image", "text"],
+          n: count && count > 1 ? count : undefined,
+          provider: providerConfig,
+          messages: [
+            {
+              role: "user",
+              content: messageContent,
+            },
+          ],
+        }),
+        signal: controller.signal,
+      })
+
+      const result = await response.json().catch(() => null)
+      if (!response.ok) {
+        const message =
+          result?.error?.message ||
+          result?.error ||
+          `OpenRouter request failed (${response.status}).`
+        throw new Error(message)
+      }
+
+      const message = result?.choices?.[0]?.message
+      const urls =
+        Array.isArray(message?.images) && message.images.length
+          ? message.images.map((item: { image_url?: { url?: string } }) => item?.image_url?.url).filter(Boolean)
+          : []
+      const text = typeof message?.content === "string" ? message.content : null
+      return { urls, text }
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 
-  const message = result?.choices?.[0]?.message
-  const imageUrls =
-    Array.isArray(message?.images) && message.images.length
-      ? message.images.map((item: { image_url?: { url?: string } }) => item?.image_url?.url).filter(Boolean)
-      : []
+  const imageUrls: string[] = []
+  let text: string | null = null
+  if (selectedModel === "nano-banana" && imageCount > 1) {
+    for (let i = 0; i < imageCount; i += 1) {
+      try {
+        const result = await requestOnce()
+        if (result.urls.length) {
+          imageUrls.push(result.urls[0])
+        }
+        if (!text && result.text) {
+          text = result.text
+        }
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error: error instanceof Error ? error.message : "OpenRouter request failed.",
+            details: { index: i + 1 },
+          },
+          { status: 502 }
+        )
+      }
+    }
+  } else {
+    try {
+      const result = await requestOnce(imageCount > 1 ? imageCount : undefined)
+      imageUrls.push(...result.urls)
+      text = result.text
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "OpenRouter request failed." },
+        { status: 502 }
+      )
+    }
+  }
+
   const imageUrl = imageUrls[0] ?? null
-  const text = typeof message?.content === "string" ? message.content : null
 
   if (!imageUrl) {
     return NextResponse.json(
@@ -243,26 +287,6 @@ export async function POST(request: Request) {
   }
 
   const imagesToStore = imageUrls.length ? imageUrls : [imageUrl]
-  if (imagesToStore.length) {
-    try {
-      const { error: historyError } = await supabase.from("image_history").insert({
-        user_id: authData.user.id,
-        prompt,
-        image_urls: imagesToStore,
-        model: selectedModel,
-        aspect_ratio: aspectRatio,
-        resolution,
-        output_format: outputFormat,
-        generation_mode: generationMode,
-      })
-      if (historyError) {
-        console.error("Failed to store image history", historyError)
-      }
-    } catch (error) {
-      console.error("Unexpected history storage error", error)
-    }
-  }
-
   const creditMultiplier = imageCount > 1 ? imageCount : 1
   const perImageCredits =
     selectedModel === "nano-banana"
@@ -277,6 +301,31 @@ export async function POST(request: Request) {
           ? 20
           : 10
   const requiredCredits = perImageCredits * creditMultiplier
+
+  if (imagesToStore.length) {
+    try {
+      const hasUploadedImages = imageDataUrls.length > 0 || Boolean(imageDataUrl)
+      const storedGenerationMode = hasUploadedImages ? "image-to-image" : "text-to-image"
+      const { error: historyError } = await supabase.from("image_history").insert({
+        user_id: authData.user.id,
+        prompt,
+        image_urls: imagesToStore,
+        model: selectedModel,
+        aspect_ratio: aspectRatio,
+        resolution,
+        output_format: outputFormat,
+        generation_mode: storedGenerationMode,
+        credits_per_image: perImageCredits,
+        credits_total: requiredCredits,
+        image_count: creditMultiplier,
+      })
+      if (historyError) {
+        console.error("Failed to store image history", historyError)
+      }
+    } catch (error) {
+      console.error("Unexpected history storage error", error)
+    }
+  }
 
   try {
     const admin = createAdminClient()

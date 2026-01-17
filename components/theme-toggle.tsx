@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { Monitor, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,9 @@ export function ThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme()
   const { t } = useI18n()
   const [mounted, setMounted] = useState(false)
+  const dropdownId = useId()
+  const triggerId = `${dropdownId}-theme-trigger`
+  const contentId = `${dropdownId}-theme-content`
 
   useEffect(() => {
     setMounted(true)
@@ -29,12 +32,12 @@ export function ThemeToggle() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild id={triggerId}>
         <Button variant="outline" size="icon" aria-label={t("theme")}>
           {currentIcon}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent id={contentId} align="end" className="w-40">
         <DropdownMenuItem onSelect={() => setTheme("light")}>
           <Sun className="mr-2 h-4 w-4" />
           {t("themeLight")}

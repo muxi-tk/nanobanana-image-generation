@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Sparkles } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { useI18n } from "@/components/i18n-provider"
 
 export function Hero() {
@@ -10,27 +10,21 @@ export function Hero() {
   const copy =
     locale === "zh"
       ? {
-          pill: "文本提示一致编辑",
+          pill: "新用户注册赠送 10 积分，可免费生成 10 张图",
           titlePrefix: "用文本",
           titleEmphasis: "快速修图",
           description: "使用引导式 AI 流程实现角色一致性、场景修改与高效迭代。",
           primaryCta: "开始编辑",
           secondaryCta: "查看示例",
-          bullet1: "一次成片",
-          bullet2: "多图支持",
-          bullet3: "自然语言",
         }
       : {
-          pill: "Consistent edits with text prompts",
+          pill: "New users get 10 credits to generate 10 images for free",
           titlePrefix: "Transform Images with",
           titleEmphasis: " Simple Text",
           description:
             "Use a guided AI workflow for character consistency, scene edits, and fast iterations with natural language.",
           primaryCta: "Start Editing",
           secondaryCta: "View Examples",
-          bullet1: "One-shot editing",
-          bullet2: "Multi-image support",
-          bullet3: "Natural language",
         }
 
   return (
@@ -42,7 +36,7 @@ export function Hero() {
       <div className="container mx-auto px-4 relative max-w-7xl">
         <div className="mx-auto max-w-4xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-sm font-medium text-primary mb-6">
-            <Sparkles className="h-4 w-4" />
+            <span aria-hidden="true">🎉</span>
             <span>{copy.pill}</span>
           </div>
 
@@ -66,20 +60,6 @@ export function Hero() {
             </Button>
           </div>
 
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary"></span>
-              {copy.bullet1}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary"></span>
-              {copy.bullet2}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary"></span>
-              {copy.bullet3}
-            </div>
-          </div>
         </div>
       </div>
     </section>

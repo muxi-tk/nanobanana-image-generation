@@ -1,21 +1,25 @@
 "use client"
 
 import { Globe } from "lucide-react"
+import { useId } from "react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/components/i18n-provider"
 
 export function LanguageToggle() {
   const { locale, setLocale, t } = useI18n()
+  const dropdownId = useId()
+  const triggerId = `${dropdownId}-language-trigger`
+  const contentId = `${dropdownId}-language-content`
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild id={triggerId}>
         <Button variant="outline" size="icon" aria-label={t("language")}>
           <Globe className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent id={contentId} align="end" className="w-40">
         <DropdownMenuItem onSelect={() => setLocale("en")} className={locale === "en" ? "font-semibold" : ""}>
           {t("languageEnglish")}
         </DropdownMenuItem>

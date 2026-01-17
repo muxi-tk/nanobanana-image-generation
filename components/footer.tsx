@@ -13,16 +13,12 @@ export function Footer() {
           disclaimer: "独立产品，与 Google 或 AI 模型提供方无关联。",
           privacy: "隐私政策",
           terms: "服务条款",
-          refund: "退款政策",
-          refundApp: "退款申请",
         }
       : {
           rights: "© 2026 nanobananaimg.online. All rights reserved.",
           disclaimer: "Independent product. Not affiliated with Google or AI model providers.",
           privacy: "Privacy Policy",
           terms: "Terms of Service",
-          refund: "Refund Policy",
-          refundApp: "Refund Application",
         }
   const companyName = siteConfig.companyName
   const companyAddress = siteConfig.companyAddress
@@ -43,12 +39,6 @@ export function Footer() {
             </Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">
               {copy.terms}
-            </Link>
-            <Link href="/refund" className="hover:text-foreground transition-colors">
-              {copy.refund}
-            </Link>
-            <Link href="/refund-application" className="hover:text-foreground transition-colors">
-              {copy.refundApp}
             </Link>
           </div>
         </div>

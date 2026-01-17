@@ -26,14 +26,6 @@ export function TermsContent() {
             "可能涉及税费，并在结账时显示。",
             "如需账单或取消帮助，请联系支持。",
           ],
-          refundTitle: "退款",
-          refundItems: [
-            "退款申请需在购买后 7 天内提交。",
-            "仅当已用额度低于总额度的 30% 时可退款。",
-            "通过审核的退款将退回原支付方式。",
-            "如涉及滥用、欺诈或违反条款，我们可能拒绝退款。",
-            "法定消费者权益不受影响。",
-          ],
           terminationTitle: "账户终止",
           terminationBody: "如违反条款、滥用服务或带来安全风险，我们可能暂停或终止账户。",
           contactTitle: "联系",
@@ -55,14 +47,6 @@ export function TermsContent() {
             "Plans renew automatically unless canceled.",
             "Taxes may apply and are shown during checkout.",
             "Contact support for billing questions or cancellation assistance.",
-          ],
-          refundTitle: "Refunds",
-          refundItems: [
-            "Refund requests must be submitted within 7 days of purchase.",
-            "Refunds are available only if used credits are less than 30% of the total credits purchased.",
-            "Approved refunds are processed back to the original payment method.",
-            "We may decline refunds for abuse, fraud, or violations of these terms.",
-            "Statutory consumer rights remain unaffected where applicable.",
           ],
           terminationTitle: "Account termination",
           terminationBody:
@@ -93,15 +77,6 @@ export function TermsContent() {
           <h2 className="text-lg font-semibold text-foreground">{copy.billingTitle}</h2>
           <ul className="mt-3 space-y-2">
             {copy.billingItems.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold text-foreground">{copy.refundTitle}</h2>
-          <ul className="mt-3 space-y-2">
-            {copy.refundItems.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>

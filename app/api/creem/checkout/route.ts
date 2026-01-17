@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
   const baseUrl = process.env.CREEM_BASE_URL || "https://api.creem.io"
   const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin
-  const successUrl = process.env.CREEM_SUCCESS_URL || `${origin}/pricing?status=success&plan=${plan}`
+  const successUrl = process.env.CREEM_SUCCESS_URL || `${origin}/generator`
 
   const supabase = await createClient()
   const { data: authData } = await supabase.auth.getUser()
@@ -70,7 +70,10 @@ export async function POST(req: Request) {
 
   const customerEmail = email || user?.email
   if (customerEmail) {
-    payload.customer = { email: customerEmail }
+    payload.customer = {
+      email: customerEmail,
+      metadata: user?.id ? { user_id: user.id } : undefined,
+    }
   }
 
   const creemRes = await fetch(`${baseUrl}/v1/checkouts`, {

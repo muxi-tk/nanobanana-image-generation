@@ -5,7 +5,11 @@ import { createAdminClient } from "@/lib/supabase/admin"
 type CreemWebhookPayload = {
   type?: string
   id?: string
+  eventId?: string
+  event_id?: string
+  eventType?: string
   event_type?: string
+  created_at?: number
   data?: {
     id?: string
     status?: string
@@ -14,9 +18,74 @@ type CreemWebhookPayload = {
       id?: string
       status?: string
       metadata?: Record<string, unknown>
+      checkout?: {
+        metadata?: Record<string, unknown>
+      }
+      subscription?: {
+        id?: string
+        metadata?: Record<string, unknown>
+      }
+      order?: {
+        id?: string
+        amount?: number
+        currency?: string
+      }
+      transaction?: {
+        id?: string
+        amount?: number
+        amount_paid?: number
+        currency?: string
+      }
+      product?: {
+        price?: number
+        currency?: string
+      }
+      subscription?: {
+        id?: string
+      }
+      customer?: {
+        email?: string
+        id?: string
+        metadata?: Record<string, unknown>
+      }
     }
     customer?: {
       email?: string
+      metadata?: Record<string, unknown>
+    }
+  }
+  object?: {
+    id?: string
+    status?: string
+    metadata?: Record<string, unknown>
+    checkout?: {
+      metadata?: Record<string, unknown>
+    }
+    subscription?: {
+      id?: string
+      metadata?: Record<string, unknown>
+    }
+    order?: {
+      id?: string
+      amount?: number
+      currency?: string
+    }
+    transaction?: {
+      id?: string
+      amount?: number
+      amount_paid?: number
+      currency?: string
+    }
+    product?: {
+      price?: number
+      currency?: string
+    }
+    subscription?: {
+      id?: string
+    }
+    customer?: {
+      email?: string
+      id?: string
       metadata?: Record<string, unknown>
     }
   }
@@ -39,26 +108,157 @@ const verifySignature = (secret: string, rawBody: string, signature: string) => 
 const toStringValue = (value: unknown) => (typeof value === "string" ? value : "")
 
 const pickMetadata = (payload: CreemWebhookPayload) =>
-  payload.data?.metadata ?? payload.data?.object?.metadata ?? payload.metadata ?? {}
+  payload.data?.metadata ??
+  payload.data?.object?.metadata ??
+  payload.data?.object?.subscription?.metadata ??
+  payload.data?.object?.checkout?.metadata ??
+  payload.object?.metadata ??
+  payload.object?.subscription?.metadata ??
+  payload.object?.checkout?.metadata ??
+  payload.metadata ??
+  {}
+
+const pickCustomerEmail = (payload: CreemWebhookPayload) =>
+  toStringValue(payload.data?.customer?.email) ||
+  toStringValue(payload.data?.object?.customer?.email) ||
+  toStringValue(payload.object?.customer?.email)
 
 const pickStatus = (payload: CreemWebhookPayload) => {
-  const status = payload.data?.status ?? payload.data?.object?.status ?? ""
+  const status = payload.data?.status ?? payload.data?.object?.status ?? payload.object?.status ?? ""
   return toStringValue(status).toLowerCase()
 }
 
 const pickEventType = (payload: CreemWebhookPayload) => {
-  const event = payload.type ?? payload.event_type ?? ""
+  const event = payload.eventType ?? payload.type ?? payload.event_type ?? ""
   return toStringValue(event).toLowerCase()
 }
 
 const pickEventId = (payload: CreemWebhookPayload, rawBody: string) => {
   const fallback = crypto.createHash("sha256").update(rawBody).digest("hex")
   return (
-    toStringValue(payload.data?.object?.id) ||
-    toStringValue(payload.data?.id) ||
     toStringValue(payload.id) ||
+    toStringValue(payload.eventId) ||
+    toStringValue(payload.event_id) ||
+    toStringValue(payload.data?.id) ||
+    toStringValue(payload.data?.object?.id) ||
+    toStringValue(payload.object?.id) ||
     fallback
   )
+}
+
+const SUCCESS_STATUSES = new Set(["paid", "succeeded", "completed"])
+const FAILURE_STATUSES = new Set(["payment_failed", "failed", "unpaid"])
+const SUCCESS_EVENT_HINTS = [
+  "paid",
+  "payment.succeeded",
+  "payment_succeeded",
+  "invoice.paid",
+  "charge.succeeded",
+]
+const FAILURE_EVENT_HINTS = [
+  "payment_failed",
+  "payment.failed",
+  "invoice.payment_failed",
+  "charge.failed",
+  "unpaid",
+]
+const matchesEventHint = (eventType: string, hint: string) => {
+  if (!eventType) {
+    return false
+  }
+  if (hint.includes(".")) {
+    return eventType.includes(hint)
+  }
+  const escaped = hint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const tokenRegex = new RegExp(`(^|[._-])${escaped}($|[._-])`)
+  return tokenRegex.test(eventType)
+}
+
+const pickObject = (payload: CreemWebhookPayload) =>
+  payload.data?.object ?? payload.object ?? payload.data ?? null
+
+const toNumberOrNull = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+  return null
+}
+
+const buildBillingRecord = (payload: CreemWebhookPayload) => {
+  const eventType = pickEventType(payload)
+  const status = pickStatus(payload)
+  const isSuccess =
+    SUCCESS_STATUSES.has(status) || SUCCESS_EVENT_HINTS.some((hint) => matchesEventHint(eventType, hint))
+  const isFailure =
+    FAILURE_STATUSES.has(status) || FAILURE_EVENT_HINTS.some((hint) => matchesEventHint(eventType, hint))
+  if (!isSuccess && !isFailure) {
+    return null
+  }
+  const normalizedStatus = isSuccess
+    ? SUCCESS_STATUSES.has(status)
+      ? status
+      : "paid"
+    : FAILURE_STATUSES.has(status)
+      ? status
+      : "payment_failed"
+  const obj = pickObject(payload)
+  const order = obj?.order
+  const transaction = obj?.transaction
+  const product = obj?.product
+  const amount =
+    toNumberOrNull(order?.amount) ??
+    toNumberOrNull(transaction?.amount_paid) ??
+    toNumberOrNull(transaction?.amount) ??
+    toNumberOrNull(product?.price)
+  const currency =
+    toStringValue(order?.currency) ||
+    toStringValue(transaction?.currency) ||
+    toStringValue(product?.currency)
+  const metadata = pickMetadata(payload)
+  const planRaw = toStringValue(metadata.plan)
+  const cycleRaw = toStringValue(metadata.cycle)
+  const packId = toStringValue(metadata.pack)
+  const planLabel = planRaw ? planRaw.toLowerCase() : ""
+  const cycleLabel = cycleRaw ? cycleRaw.toLowerCase() : ""
+  const packKey = packId ? packId.toLowerCase() : ""
+  const description = planLabel
+    ? `Subscription ${planLabel}${cycleLabel ? ` (${cycleLabel})` : ""}`
+    : packKey
+      ? `Credit pack ${packKey}`
+      : eventType || status || null
+  const planCredits = planLabel ? PLAN_CREDITS[planLabel] : null
+  const credits = isSuccess
+    ? packKey && PACK_CREDITS[packKey]
+      ? PACK_CREDITS[packKey]
+      : planCredits
+        ? planCredits.monthly
+        : null
+    : null
+  const expiresAt =
+    isSuccess && planLabel
+      ? (() => {
+          const next = new Date()
+          next.setMonth(next.getMonth() + 1)
+          return next.toISOString()
+        })()
+      : null
+
+  const orderTransactionId = toStringValue(order?.transaction)
+  return {
+    event_type: eventType || null,
+    status: normalizedStatus || (eventType ? eventType : null),
+    description,
+    customer_id: toStringValue(obj?.customer?.id),
+    order_id: toStringValue(order?.id) || toStringValue(obj?.order),
+    subscription_id: toStringValue(obj?.subscription?.id) || toStringValue(obj?.subscription),
+    transaction_id:
+      toStringValue(transaction?.id) || orderTransactionId || toStringValue(obj?.last_transaction_id),
+    amount,
+    currency: currency || null,
+    credits,
+    expires_at: expiresAt,
+    raw_event: payload,
+  }
 }
 
 const planIsPro = (plan: string) =>
@@ -104,13 +304,38 @@ export async function POST(req: Request) {
   }
 
   const metadata = pickMetadata(payload)
-  const userId =
+  const userIdFromMetadata =
     toStringValue(metadata.user_id) ||
     toStringValue(metadata.userId) ||
     toStringValue(payload.data?.customer?.metadata?.user_id) ||
-    toStringValue(payload.data?.customer?.metadata?.userId)
+    toStringValue(payload.data?.customer?.metadata?.userId) ||
+    toStringValue(payload.data?.object?.customer?.metadata?.user_id) ||
+    toStringValue(payload.data?.object?.customer?.metadata?.userId) ||
+    toStringValue(payload.object?.customer?.metadata?.user_id) ||
+    toStringValue(payload.object?.customer?.metadata?.userId)
+
+  const admin = createAdminClient()
+  let userId = userIdFromMetadata
+  if (!userId) {
+    const email = pickCustomerEmail(payload)
+    if (email) {
+      const { data: users, error: usersError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+      if (usersError) {
+        console.error("Failed to list users for webhook lookup", usersError)
+      } else {
+        const match = users.users.find((user) => user.email?.toLowerCase() === email.toLowerCase())
+        userId = match?.id ?? ""
+      }
+    }
+  }
 
   if (!userId) {
+    console.warn("Missing user_id for Creem webhook", {
+      eventType: pickEventType(payload),
+      customerEmail: pickCustomerEmail(payload),
+      metadataKeys: Object.keys(metadata || {}),
+      eventId: pickEventId(payload, rawBody),
+    })
     return NextResponse.json({ error: "Missing user_id metadata." }, { status: 400 })
   }
 
@@ -121,17 +346,25 @@ export async function POST(req: Request) {
   const eventId = pickEventId(payload, rawBody)
   const cycle = toStringValue(metadata.cycle) || "monthly"
   const packId = toStringValue(metadata.pack)
+  console.info("Creem webhook received", {
+    eventType,
+    status,
+    eventId,
+    userId,
+    plan: planNormalized || null,
+    cycle,
+    packId: packId || null,
+  })
 
-  const canceledStatuses = ["canceled", "cancelled", "expired", "past_due", "unpaid"]
-  const isCanceledEvent = eventType.includes("cancel") || eventType.includes("expire")
+  const canceledStatuses = ["canceled", "cancelled"]
+  const isCanceledEvent = eventType.includes("cancel")
   const isActive = !canceledStatuses.includes(status) && !isCanceledEvent
   const isProMember = planIsPro(planNormalized) && isActive
-  const isSuccessStatus = ["paid", "succeeded", "completed", "active"].includes(status)
+  const isSuccessStatus = ["paid", "succeeded", "completed"].includes(status)
   const isSuccessEvent =
     eventType.includes("paid") || eventType.includes("payment") || eventType.includes("checkout")
   const shouldGrant = isActive && (isSuccessStatus || isSuccessEvent)
 
-  const admin = createAdminClient()
   const { data: userData, error: userError } = await admin.auth.admin.getUserById(userId)
   if (userError || !userData?.user) {
     return NextResponse.json({ error: "User not found." }, { status: 404 })
@@ -174,18 +407,16 @@ export async function POST(req: Request) {
       )
       if (packError) {
         console.error("Failed to grant pack credits", packError)
+      } else {
+        console.info("Granted pack credits", { userId, packId, eventId })
       }
     }
 
     if (planNormalized && PLAN_CREDITS[planNormalized]) {
       const planCredits = PLAN_CREDITS[planNormalized]
-      const credits = cycle === "yearly" ? planCredits.yearly : planCredits.monthly
+      const credits = planCredits.monthly
       const expiresAt = new Date(now)
-      if (cycle === "yearly") {
-        expiresAt.setFullYear(expiresAt.getFullYear() + 1)
-      } else {
-        expiresAt.setMonth(expiresAt.getMonth() + 1)
-      }
+      expiresAt.setMonth(expiresAt.getMonth() + 1)
       const { error: planError } = await admin.from("credit_grants").upsert(
         {
           user_id: userId,
@@ -201,7 +432,31 @@ export async function POST(req: Request) {
       )
       if (planError) {
         console.error("Failed to grant subscription credits", planError)
+      } else {
+        console.info("Granted subscription credits", {
+          userId,
+          plan: planNormalized,
+          cycle,
+          eventId,
+        })
       }
+    }
+  }
+
+  const billingRecord = buildBillingRecord(payload)
+  if (billingRecord) {
+    const { error: billingError } = await admin.from("billing_records").upsert(
+      {
+        user_id: userId,
+        source_event_id: eventId,
+        ...billingRecord,
+      },
+      { onConflict: "source_event_id" }
+    )
+    if (billingError) {
+      console.error("Failed to record billing event", billingError)
+    } else {
+      console.info("Recorded billing event", { userId, eventId, eventType })
     }
   }
 

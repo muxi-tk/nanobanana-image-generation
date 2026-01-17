@@ -1,6 +1,6 @@
 "use client"
 
-import { Sparkles, Users, ImageIcon, Zap, Images, TrendingUp } from "lucide-react"
+import { Sparkles, Users, ImageIcon, TrendingUp } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { useI18n } from "@/components/i18n-provider"
 
@@ -28,16 +28,6 @@ export function Features() {
               description: "在保留原始场景语境的同时完成修改。",
             },
             {
-              icon: Zap,
-              title: "一次成片",
-              description: "快速迭代，减少手动调整次数。",
-            },
-            {
-              icon: Images,
-              title: "多图上下文",
-              description: "处理多张图片，保持输出风格一致。",
-            },
-            {
               icon: TrendingUp,
               title: "AI UGC 生产",
               description: "为社媒与营销流程生成一致的内容资产。",
@@ -62,16 +52,6 @@ export function Features() {
               icon: ImageIcon,
               title: "Scene Preservation",
               description: "Blend edits with original backgrounds while keeping context intact.",
-            },
-            {
-              icon: Zap,
-              title: "One-Shot Editing",
-              description: "Quick iterations that reduce the number of manual passes.",
-            },
-            {
-              icon: Images,
-              title: "Multi-Image Context",
-              description: "Process multiple images to keep outputs aligned across a set.",
             },
             {
               icon: TrendingUp,
