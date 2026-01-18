@@ -156,7 +156,7 @@ export async function POST(request: Request) {
   if (outputFormat && outputFormat !== "png") {
     settings.push(`Output format: ${outputFormat.toUpperCase()}`)
   }
-  if (imageCount > 1) {
+  if (imageCount >= 1) {
     settings.push(`Number of images: ${imageCount}`)
   }
 
@@ -197,6 +197,7 @@ export async function POST(request: Request) {
   const modelName = MODEL_MAP[selectedModel] ?? MODEL_MAP["nano-banana"]
 
   const requestOnce = async (count?: number) => {
+    const requestedCount = typeof count === "number" && count > 0 ? count : 1
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS)
     try {
@@ -206,7 +207,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           model: modelName,
           modalities: ["image", "text"],
-          n: count && count > 1 ? count : undefined,
+          n: requestedCount,
           provider: providerConfig,
           messages: [
             {
@@ -241,6 +242,7 @@ export async function POST(request: Request) {
 
   const imageUrls: string[] = []
   let text: string | null = null
+  const expectedCount = Math.max(1, imageCount)
   if (selectedModel === "nano-banana" && imageCount > 1) {
     for (let i = 0; i < imageCount; i += 1) {
       try {
@@ -264,7 +266,7 @@ export async function POST(request: Request) {
   } else {
     try {
       const result = await requestOnce(imageCount > 1 ? imageCount : undefined)
-      imageUrls.push(...result.urls)
+      imageUrls.push(...result.urls.slice(0, expectedCount))
       text = result.text
     } catch (error) {
       return NextResponse.json(
@@ -274,7 +276,8 @@ export async function POST(request: Request) {
     }
   }
 
-  const imageUrl = imageUrls[0] ?? null
+  const finalImageUrls = imageUrls.slice(0, expectedCount)
+  const imageUrl = finalImageUrls[0] ?? null
 
   if (!imageUrl) {
     return NextResponse.json(
@@ -286,7 +289,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const imagesToStore = imageUrls.length ? imageUrls : [imageUrl]
+  const imagesToStore = finalImageUrls.length ? finalImageUrls : [imageUrl]
   const creditMultiplier = imageCount > 1 ? imageCount : 1
   const perImageCredits =
     selectedModel === "nano-banana"
@@ -447,5 +450,5 @@ export async function POST(request: Request) {
     console.error("Unexpected credit update error", error)
   }
 
-  return NextResponse.json({ imageUrl, imageUrls, text, historyId })
+  return NextResponse.json({ imageUrl, imageUrls: finalImageUrls, text, historyId })
 }
