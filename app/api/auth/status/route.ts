@@ -147,7 +147,9 @@ export async function GET() {
     })
     hasCreditPack = packCredits > 0
     const totalCredits = subscriptionCredits + packCredits
-    if (creditsValue === null && totalCredits > 0) {
+    if (grants.length > 0) {
+      creditsValue = totalCredits
+    } else if (creditsValue === null && totalCredits > 0) {
       creditsValue = totalCredits
     }
     if (subscriptionCredits > 0 && planRank(planNormalized) === 0) {
