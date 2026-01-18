@@ -323,6 +323,25 @@ const buildBillingRecord = (payload: CreemWebhookPayload) => {
   }
 }
 
+const buildIdempotencyKey = (
+  record: ReturnType<typeof buildBillingRecord> | null,
+  fallbackEventId: string
+) => {
+  const orderId = toStringValue(record?.order_id)
+  if (orderId) {
+    return `order:${orderId}`
+  }
+  const transactionId = toStringValue(record?.transaction_id)
+  if (transactionId) {
+    return `transaction:${transactionId}`
+  }
+  const subscriptionId = toStringValue(record?.subscription_id)
+  if (subscriptionId) {
+    return `subscription:${subscriptionId}`
+  }
+  return `event:${fallbackEventId}`
+}
+
 const planIsPro = (plan: string) =>
   ["pro", "team", "enterprise", "studio", "vip"].includes(plan.toLowerCase())
 
@@ -407,12 +426,15 @@ export async function POST(req: Request) {
   const status = pickStatus(payload)
   const eventType = pickEventType(payload)
   const eventId = pickEventId(payload, rawBody)
+  const billingRecord = buildBillingRecord(payload)
+  const idempotencyKey = buildIdempotencyKey(billingRecord, eventId)
   const cycle = resolved.cycle
   const packId = resolved.pack
   console.info("Creem webhook received", {
     eventType,
     status,
     eventId,
+    idempotencyKey,
     userId,
     plan: planNormalized || null,
     cycle: cycle || null,
@@ -468,7 +490,7 @@ export async function POST(req: Request) {
           credits_total: credits,
           credits_remaining: credits,
           expires_at: null,
-          source_event_id: `${eventId}:pack`,
+          source_event_id: `${idempotencyKey}:pack`,
         },
         { onConflict: "source_event_id" }
       )
@@ -498,7 +520,7 @@ export async function POST(req: Request) {
           credits_total: credits,
           credits_remaining: credits,
           expires_at: expiresAt.toISOString(),
-          source_event_id: `${eventId}:subscription`,
+          source_event_id: `${idempotencyKey}:subscription`,
         },
         { onConflict: "source_event_id" }
       )
@@ -515,12 +537,11 @@ export async function POST(req: Request) {
     }
   }
 
-  const billingRecord = buildBillingRecord(payload)
   if (billingRecord) {
     const { error: billingError } = await admin.from("billing_records").upsert(
       {
         user_id: userId,
-        source_event_id: eventId,
+        source_event_id: idempotencyKey,
         ...billingRecord,
       },
       { onConflict: "source_event_id" }

@@ -7,8 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { useI18n } from "@/components/i18n-provider"
 import { siteConfig } from "@/lib/site"
+import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 
 type PlanSnapshot = {
+  userId?: string | null
   plan?: string | null
   cycle?: string | null
   subscriptionStatus?: string | null
@@ -36,6 +38,7 @@ export function PlanContent() {
   const { t, locale } = useI18n()
   const [snapshot, setSnapshot] = useState<PlanSnapshot | null>(null)
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
   const supportEmail = siteConfig.supportEmail || "support@nanobananaimg.online"
 
   useEffect(() => {
@@ -73,10 +76,32 @@ export function PlanContent() {
       isMounted = false
       controller.abort()
     }
-  }, [])
+  }, [refreshKey])
 
-  const planKey = normalize(snapshot?.plan)
-  const cycleKey = normalize(snapshot?.cycle)
+  useEffect(() => {
+    const userId = snapshot?.userId
+    if (!userId) {
+      return
+    }
+    const supabase = createBrowserSupabaseClient()
+    const channel = supabase
+      .channel(`plan-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "credit_grants", filter: `user_id=eq.${userId}` },
+        () => setRefreshKey((prev) => prev + 1)
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "billing_records", filter: `user_id=eq.${userId}` },
+        () => setRefreshKey((prev) => prev + 1)
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [snapshot?.userId])
+
   const credits = typeof snapshot?.credits === "number" ? snapshot?.credits : 0
   const formatStatus = (value: string | null | undefined) => {
     const normalized = normalize(value)
@@ -102,9 +127,6 @@ export function PlanContent() {
     if (key === "enterprise") return t("planEnterprise")
     return key
   }
-  const planLabel = useMemo(() => resolvePlanLabel(planKey), [planKey, t])
-  const cycleLabel =
-    cycleKey === "yearly" ? t("planCycleYearly") : cycleKey === "monthly" ? t("planCycleMonthly") : "-"
   const subscriptionCycleLabel = (value: string | null | undefined) => {
     const key = normalize(value)
     if (key === "yearly") return t("planCycleYearly")
@@ -144,7 +166,16 @@ export function PlanContent() {
       return bTime - aTime
     })
   }, [snapshot?.subscriptions])
-  const allowSelfManage = Boolean(portalUrl && planKey)
+  const summaryPlanKey = normalize(subscriptions[0]?.plan ?? snapshot?.plan)
+  const summaryCycleKey = normalize(subscriptions[0]?.cycle ?? snapshot?.cycle)
+  const planLabel = useMemo(() => resolvePlanLabel(summaryPlanKey), [summaryPlanKey, t])
+  const cycleLabel =
+    summaryCycleKey === "yearly"
+      ? t("planCycleYearly")
+      : summaryCycleKey === "monthly"
+        ? t("planCycleMonthly")
+        : "-"
+  const allowSelfManage = Boolean(portalUrl && (summaryPlanKey || subscriptions.length))
 
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-12">

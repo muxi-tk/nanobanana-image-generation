@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useI18n } from "@/components/i18n-provider"
 import { cn } from "@/lib/utils"
+import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 
@@ -43,10 +44,50 @@ export function BillingContent() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [total, setTotal] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
     setPage(1)
   }, [search, dateRange?.from, dateRange?.to])
+
+  useEffect(() => {
+    let isMounted = true
+    const supabase = createBrowserSupabaseClient()
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (isMounted) {
+          setUserId(data.user?.id ?? null)
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setUserId(null)
+        }
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!userId) {
+      return
+    }
+    const supabase = createBrowserSupabaseClient()
+    const channel = supabase
+      .channel(`billing-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "billing_records", filter: `user_id=eq.${userId}` },
+        () => setRefreshKey((prev) => prev + 1)
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [userId])
 
   const formatRangeDate = (date: Date) => {
     const targetLocale = locale === "zh" ? "zh-CN" : "en-US"
@@ -124,7 +165,7 @@ export function BillingContent() {
       controller.abort()
       clearTimeout(timeoutId)
     }
-  }, [endIso, page, pageSize, search, startIso])
+  }, [endIso, page, pageSize, refreshKey, search, startIso])
 
   const transactions = billingInfo?.transactions ?? []
   const totalPages = Math.max(1, Math.ceil(total / pageSize))

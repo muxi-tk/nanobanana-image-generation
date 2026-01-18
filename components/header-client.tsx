@@ -31,6 +31,40 @@ type HeaderClientProps = {
   withSidebar?: boolean
 }
 
+type SubscriptionEntry = {
+  plan?: string | null
+  cycle?: string | null
+  creditsRemaining?: number | null
+  expiresAt?: string | null
+  createdAt?: string | null
+  active?: boolean
+}
+
+const planRank = (value: string | null | undefined) => {
+  const key = (value || "").trim().toLowerCase()
+  if (key === "enterprise" || key === "team") return 3
+  if (key === "pro" || key === "studio" || key === "vip") return 2
+  if (key === "starter") return 1
+  return 0
+}
+
+const pickBestPlan = (entries?: SubscriptionEntry[] | null) => {
+  const list = Array.isArray(entries) ? entries : []
+  const active = list.filter((entry) => entry?.active && entry?.plan)
+  if (!active.length) return null
+  const sorted = [...active].sort((a, b) => {
+    const rankDiff = planRank(b.plan) - planRank(a.plan)
+    if (rankDiff !== 0) return rankDiff
+    const aExpiry = a.expiresAt ? new Date(a.expiresAt).getTime() : Number.MAX_SAFE_INTEGER
+    const bExpiry = b.expiresAt ? new Date(b.expiresAt).getTime() : Number.MAX_SAFE_INTEGER
+    if (aExpiry !== bExpiry) return bExpiry - aExpiry
+    const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    return bCreated - aCreated
+  })
+  return typeof sorted[0]?.plan === "string" ? sorted[0].plan : null
+}
+
 export function HeaderClient({
   avatarUrl,
   displayName,
@@ -108,14 +142,20 @@ export function HeaderClient({
         return
       }
       const data = (await res.json().catch(() => null)) as
-        | { credits?: number; plan?: string | null; hasCreditPack?: boolean }
+        | {
+            credits?: number
+            plan?: string | null
+            hasCreditPack?: boolean
+            subscriptions?: SubscriptionEntry[]
+          }
         | null
       if (typeof data?.credits === "number") {
         setCredits(data.credits)
       } else {
         setCredits(10)
       }
-      setPlan(typeof data?.plan === "string" ? data.plan : null)
+      const bestPlan = pickBestPlan(data?.subscriptions)
+      setPlan(bestPlan ?? (typeof data?.plan === "string" ? data.plan : null))
       setHasCreditPack(Boolean(data?.hasCreditPack))
     } catch {
       setCredits(null)
