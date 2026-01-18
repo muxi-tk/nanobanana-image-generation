@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+import { buildBillingSearchText } from "@/lib/billing-search"
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -33,16 +34,25 @@ export async function GET(request: Request) {
       }
 
       if (!existingRecord) {
+        const description = "signup bonus"
+        const eventType = "signup_bonus"
+        const status = "paid"
+        const searchText = buildBillingSearchText({
+          description,
+          eventType,
+          status,
+        })
         const { error: billingError } = await admin.from("billing_records").upsert(
           {
             user_id: user.id,
             source_event_id: signupSourceId,
-            event_type: "signup_bonus",
-            status: "paid",
-            description: "signup bonus",
+            event_type: eventType,
+            status,
+            description,
             amount: 0,
             currency: null,
             credits: 10,
+            search_text: searchText,
           },
           { onConflict: "source_event_id" }
         )

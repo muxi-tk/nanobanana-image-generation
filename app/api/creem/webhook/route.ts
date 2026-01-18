@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { buildBillingSearchText } from "@/lib/billing-search"
 
 type CreemWebhookPayload = {
   type?: string
@@ -528,11 +529,20 @@ export async function POST(req: Request) {
   }
 
   if (billingRecord && allowOrderProcessing) {
+    const searchText = buildBillingSearchText({
+      description: billingRecord.description,
+      eventType: billingRecord.event_type,
+      status: billingRecord.status,
+      orderId: billingRecord.order_id,
+      transactionId: billingRecord.transaction_id,
+      subscriptionId: billingRecord.subscription_id,
+    })
     const { error: billingError } = await admin.from("billing_records").upsert(
       {
         user_id: userId,
         source_event_id: idempotencyKey,
         ...billingRecord,
+        search_text: searchText,
       },
       { onConflict: "source_event_id" }
     )

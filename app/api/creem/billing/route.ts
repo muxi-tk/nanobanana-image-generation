@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+import { buildBillingSearchText } from "@/lib/billing-search"
 
 type CreemCustomer = {
   id?: string
@@ -54,6 +55,38 @@ export async function GET(req: Request) {
   const customerData = (await customerRes.json().catch(() => null)) as CreemCustomer | null
   const customerId = customerData?.id ?? null
   const admin = createAdminClient()
+  if (query) {
+    const { data: missingSearch, error: missingError } = await admin
+      .from("billing_records")
+      .select("id, description, event_type, status, order_id, transaction_id, subscription_id")
+      .eq("user_id", authData.user.id)
+      .is("search_text", null)
+    if (missingError) {
+      console.error("Failed to fetch billing search_text gaps", missingError)
+    } else if (Array.isArray(missingSearch) && missingSearch.length > 0) {
+      const updates = missingSearch
+        .map((record) => ({
+          id: record.id,
+          search_text: buildBillingSearchText({
+            description: record.description,
+            eventType: record.event_type,
+            status: record.status,
+            orderId: record.order_id,
+            transactionId: record.transaction_id,
+            subscriptionId: record.subscription_id,
+          }),
+        }))
+        .filter((record) => record.search_text)
+      if (updates.length > 0) {
+        const { error: updateError } = await admin
+          .from("billing_records")
+          .upsert(updates, { onConflict: "id" })
+        if (updateError) {
+          console.error("Failed to backfill billing search_text", updateError)
+        }
+      }
+    }
+  }
   let recordsQuery = admin
     .from("billing_records")
     .select(
@@ -71,6 +104,7 @@ export async function GET(req: Request) {
     const like = `%${query}%`
     recordsQuery = recordsQuery.or(
       [
+        `search_text.ilike.${like}`,
         `description.ilike.${like}`,
         `event_type.ilike.${like}`,
         `status.ilike.${like}`,
