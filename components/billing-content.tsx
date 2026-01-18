@@ -75,6 +75,13 @@ export function BillingContent() {
     if (!userId) {
       return
     }
+    setRefreshKey((prev) => prev + 1)
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) {
+      return
+    }
     const supabase = createBrowserSupabaseClient()
     const channel = supabase
       .channel(`billing-${userId}`)
