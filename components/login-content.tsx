@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { LoginOptions } from "@/app/login/login-options"
+import { LoginOptions } from "@/app/(app)/login/login-options"
 import { Logo } from "@/components/logo"
 import { useI18n } from "@/components/i18n-provider"
 
