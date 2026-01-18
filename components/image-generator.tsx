@@ -113,8 +113,6 @@ export function ImageGenerator() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [notifyEnabled, setNotifyEnabled] = useState(false)
-  const [notifyStatus, setNotifyStatus] = useState<string | null>(null)
   const [insufficientOpen, setInsufficientOpen] = useState(false)
   const [requiredCredits, setRequiredCredits] = useState(0)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
@@ -122,13 +120,6 @@ export function ImageGenerator() {
     locale === "zh"
       ? {
           upgradeVipFeatureTitle: "VIP 功能 - Pro 权限",
-          notificationCompleteTitle: "生成完成",
-          notificationCompleteBody: "你的图片已准备就绪。",
-          notificationFailedTitle: "生成失败",
-          notificationFailedBody: "请查看错误提示。",
-          notifyUnsupported: "当前浏览器不支持通知。",
-          notifyBlocked: "通知权限已被浏览器阻止。",
-          notifyDenied: "未授予通知权限。",
           invalidImage: "请上传有效的图片文件。",
           imageTooLarge: "图片过大，每张最大 10MB。",
           promptRequired: "请输入提示词。",
@@ -168,7 +159,6 @@ export function ImageGenerator() {
           removeImage: "移除图片",
           promptLabel: "提示词",
           promptPlaceholder: "例如：'未来城市，纳米科技驱动，金色日落光线，超细节...'",
-          notifyLabel: "生成完成后通知我",
           generateNow: (credits: number) => `立即生成（${credits} 积分）`,
           outputGallery: "输出预览",
           generatedOutputAlt: "生成结果",
@@ -206,13 +196,6 @@ export function ImageGenerator() {
         }
       : {
           upgradeVipFeatureTitle: "VIP Feature - Pro Access",
-          notificationCompleteTitle: "Generation complete",
-          notificationCompleteBody: "Your images are ready.",
-          notificationFailedTitle: "Generation failed",
-          notificationFailedBody: "Check the error message for details.",
-          notifyUnsupported: "Browser notifications are not supported in this browser.",
-          notifyBlocked: "Notifications are blocked in your browser settings.",
-          notifyDenied: "Notification permission was not granted.",
           invalidImage: "Please upload valid image files.",
           imageTooLarge: "Image too large. Max 10MB per image.",
           promptRequired: "Please enter a prompt.",
@@ -253,7 +236,6 @@ export function ImageGenerator() {
           promptLabel: "Prompt",
           promptPlaceholder:
             "e.g., 'A futuristic city powered by nano technology, golden hour lighting, ultra detailed...'",
-          notifyLabel: "Notify me when complete",
           generateNow: (credits: number) => `Generate Now (${credits} Credits)`,
           outputGallery: "Output Gallery",
           generatedOutputAlt: "Generated output",
@@ -295,9 +277,6 @@ export function ImageGenerator() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const progressIntervalRef = useRef<number | null>(null)
-  const titleFlashIntervalRef = useRef<number | null>(null)
-  const titleFlashTimeoutRef = useRef<number | null>(null)
-  const originalTitleRef = useRef<string | null>(null)
   const generateLockRef = useRef(false)
   const imageCountValue = Number.parseInt(imageCount, 10)
   const safeImageCount = Number.isNaN(imageCountValue) || imageCountValue < 1 ? 1 : imageCountValue
@@ -415,84 +394,6 @@ export function ImageGenerator() {
     }
   }
 
-  const stopTitleFlash = () => {
-    if (titleFlashIntervalRef.current !== null) {
-      window.clearInterval(titleFlashIntervalRef.current)
-      titleFlashIntervalRef.current = null
-    }
-    if (titleFlashTimeoutRef.current !== null) {
-      window.clearTimeout(titleFlashTimeoutRef.current)
-      titleFlashTimeoutRef.current = null
-    }
-    if (originalTitleRef.current) {
-      document.title = originalTitleRef.current
-      originalTitleRef.current = null
-    }
-  }
-
-  const startTitleFlash = (message: string) => {
-    if (typeof document === "undefined" || !document.hidden) {
-      return
-    }
-    stopTitleFlash()
-    originalTitleRef.current = document.title
-    let showAlt = false
-    titleFlashIntervalRef.current = window.setInterval(() => {
-      document.title = showAlt ? message : originalTitleRef.current || message
-      showAlt = !showAlt
-    }, 800)
-    titleFlashTimeoutRef.current = window.setTimeout(stopTitleFlash, 8000)
-  }
-
-  const playNotifySound = () => {
-    if (typeof window === "undefined") {
-      return
-    }
-    const AudioContextClass =
-      window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextClass) {
-      return
-    }
-    try {
-      const context = new AudioContextClass()
-      const oscillator = context.createOscillator()
-      const gain = context.createGain()
-      oscillator.type = "sine"
-      oscillator.frequency.value = 880
-      gain.gain.value = 0.06
-      oscillator.connect(gain)
-      gain.connect(context.destination)
-      oscillator.start()
-      const stopAt = context.currentTime + 1
-      gain.gain.exponentialRampToValueAtTime(0.0001, stopAt)
-      oscillator.stop(stopAt)
-      oscillator.onended = () => {
-        context.close()
-      }
-    } catch (err) {
-      console.warn("Notification sound failed", err)
-    }
-  }
-
-  const notifyCompletion = (status: "success" | "error") => {
-    if (!notifyEnabled) {
-      return
-    }
-    const title =
-      status === "success" ? copy.notificationCompleteTitle : copy.notificationFailedTitle
-    const body =
-      status === "success" ? copy.notificationCompleteBody : copy.notificationFailedBody
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-      try {
-        new Notification(title, { body })
-      } catch (err) {
-        console.warn("Notification failed", err)
-      }
-    }
-    startTitleFlash(title)
-    playNotifySound()
-  }
-
   const refreshCredits = async (nextCredits?: number | null) => {
     if (typeof nextCredits === "number") {
       setCredits(nextCredits)
@@ -568,7 +469,6 @@ export function ImageGenerator() {
 
     return () => {
       clearProgressInterval()
-      stopTitleFlash()
     }
   }, [copy.sizeNotAvailable])
 
@@ -587,19 +487,6 @@ export function ImageGenerator() {
       setOutputFormat("png")
     }
   }, [outputFormat, selectedModel])
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (!document.hidden) {
-        stopTitleFlash()
-      }
-    }
-    document.addEventListener("visibilitychange", handleVisibility)
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility)
-      stopTitleFlash()
-    }
-  }, [])
 
   useEffect(() => {
     const fetchAuthStatus = async () => {
@@ -624,35 +511,6 @@ export function ImageGenerator() {
 
     fetchAuthStatus()
   }, [])
-
-  const handleNotifyToggle = async (checked: boolean) => {
-    setNotifyStatus(null)
-    if (!checked) {
-      setNotifyEnabled(false)
-      return
-    }
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      setNotifyStatus(copy.notifyUnsupported)
-      setNotifyEnabled(false)
-      return
-    }
-    if (Notification.permission === "granted") {
-      setNotifyEnabled(true)
-      return
-    }
-    if (Notification.permission === "denied") {
-      setNotifyStatus(copy.notifyBlocked)
-      setNotifyEnabled(false)
-      return
-    }
-    const permission = await Notification.requestPermission()
-    if (permission === "granted") {
-      setNotifyEnabled(true)
-    } else {
-      setNotifyStatus(copy.notifyDenied)
-      setNotifyEnabled(false)
-    }
-  }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -809,7 +667,6 @@ export function ImageGenerator() {
       if (!res.ok) {
         setError(data?.error || copy.requestFailed(res.status))
         setProgress(0)
-        notifyCompletion("error")
         return
       }
 
@@ -817,7 +674,6 @@ export function ImageGenerator() {
       if (!images.length) {
         setError(copy.noImageReturned)
         setProgress(0)
-        notifyCompletion("error")
         return
       }
 
@@ -830,11 +686,9 @@ export function ImageGenerator() {
       } else {
         refreshCredits()
       }
-      notifyCompletion("success")
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.unknownError)
       setProgress(0)
-      notifyCompletion("error")
     } finally {
       clearProgressInterval()
       setIsGenerating(false)
@@ -1082,20 +936,6 @@ export function ImageGenerator() {
                 </div>
 
                 {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-                <div className="space-y-1">
-                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-border"
-                      checked={notifyEnabled}
-                      onChange={(e) => handleNotifyToggle(e.target.checked)}
-                      disabled={isGenerating}
-                    />
-                    {copy.notifyLabel}
-                  </label>
-                  {notifyStatus ? <p className="text-xs text-muted-foreground">{notifyStatus}</p> : null}
-                </div>
 
                 <Button
                   className="h-12 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90"

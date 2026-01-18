@@ -23,7 +23,7 @@ export function PrivacyContent() {
           useItems: [
             "提供、保护并改进 Nano Banana 服务。",
             "处理付款、防止欺诈并履行法律义务。",
-            "发送产品更新、支持回复与账号通知。",
+            "分析使用情况以提升服务质量与可靠性。",
           ],
           shareTitle: "共享与处理方",
           shareBody:
@@ -50,7 +50,7 @@ export function PrivacyContent() {
           useItems: [
             "Provide, secure, and improve the Nano Banana service.",
             "Process payments, prevent fraud, and comply with legal requirements.",
-            "Communicate product updates, support responses, and account notices.",
+            "Analyze usage to improve service quality and reliability.",
           ],
           shareTitle: "Sharing and processors",
           shareBody:
