@@ -65,30 +65,34 @@ export async function GET() {
     }
   }
 
-  if (!isProMember) {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle()
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle()
 
-    if (!profileError && profile) {
+  if (!profileError && profile) {
+    const resolvedProfileCredits = Number(
+      profile.credits ??
+        profile.credit_balance ??
+        profile.balance ??
+        profile.credit ??
+        profile.remaining_credits ??
+        profile.available_credits
+    )
+    if (!Number.isNaN(resolvedProfileCredits)) {
+      profileCredits = resolvedProfileCredits
+      if (creditsValue === null) {
+        creditsValue = resolvedProfileCredits
+      }
+    }
+    if (!isProMember) {
       const profilePlan = `${profile.plan ?? profile.tier ?? ""}`.toLowerCase()
       const profileActive = `${profile.subscription_status ?? ""}`.toLowerCase() === "active"
       isProMember =
-        Boolean(profile.is_pro) || profileActive || ["pro", "team", "enterprise", "studio", "vip"].includes(profilePlan)
-      const resolvedProfileCredits = Number(
-        profile.credits ??
-          profile.credit_balance ??
-          profile.balance ??
-          profile.credit ??
-          profile.remaining_credits ??
-          profile.available_credits
-      )
-      if (!Number.isNaN(resolvedProfileCredits)) {
-        profileCredits = resolvedProfileCredits
-        creditsValue = resolvedProfileCredits
-      }
+        Boolean(profile.is_pro) ||
+        profileActive ||
+        ["pro", "team", "enterprise", "studio", "vip"].includes(profilePlan)
     }
   }
 
