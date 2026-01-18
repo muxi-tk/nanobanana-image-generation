@@ -50,7 +50,43 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch history." }, { status: 500 })
   }
 
-  return NextResponse.json({ items: data ?? [], total: count ?? 0, page, pageSize })
+  const items = data ?? []
+  if (!items.length) {
+    return NextResponse.json({ items, total: count ?? 0, page, pageSize })
+  }
+
+  const historyIds = items.map((item) => item.id)
+  const { data: shareLinks, error: shareError } = await supabase
+    .from("share_links")
+    .select("id, history_id, image_url")
+    .in("history_id", historyIds)
+
+  if (shareError) {
+    console.error("Failed to fetch share links", shareError)
+  }
+
+  const shareMap = new Map<string, Record<string, string>>()
+  if (Array.isArray(shareLinks)) {
+    shareLinks.forEach((link) => {
+      const historyId = link.history_id
+      const imageUrl = link.image_url
+      if (!historyId || !imageUrl) {
+        return
+      }
+      const existing = shareMap.get(historyId) ?? {}
+      if (!existing[imageUrl]) {
+        existing[imageUrl] = link.id
+      }
+      shareMap.set(historyId, existing)
+    })
+  }
+
+  const itemsWithShare = items.map((item) => ({
+    ...item,
+    share_map: shareMap.get(item.id) ?? {},
+  }))
+
+  return NextResponse.json({ items: itemsWithShare, total: count ?? 0, page, pageSize })
 }
 
 export async function DELETE(request: Request) {

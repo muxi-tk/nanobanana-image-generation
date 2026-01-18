@@ -323,23 +323,9 @@ const buildBillingRecord = (payload: CreemWebhookPayload) => {
   }
 }
 
-const buildIdempotencyKey = (
-  record: ReturnType<typeof buildBillingRecord> | null,
-  fallbackEventId: string
-) => {
+const buildOrderKey = (record: ReturnType<typeof buildBillingRecord> | null) => {
   const orderId = toStringValue(record?.order_id)
-  if (orderId) {
-    return `order:${orderId}`
-  }
-  const transactionId = toStringValue(record?.transaction_id)
-  if (transactionId) {
-    return `transaction:${transactionId}`
-  }
-  const subscriptionId = toStringValue(record?.subscription_id)
-  if (subscriptionId) {
-    return `subscription:${subscriptionId}`
-  }
-  return `event:${fallbackEventId}`
+  return orderId ? `order:${orderId}` : ""
 }
 
 const planIsPro = (plan: string) =>
@@ -427,7 +413,8 @@ export async function POST(req: Request) {
   const eventType = pickEventType(payload)
   const eventId = pickEventId(payload, rawBody)
   const billingRecord = buildBillingRecord(payload)
-  const idempotencyKey = buildIdempotencyKey(billingRecord, eventId)
+  const idempotencyKey = buildOrderKey(billingRecord)
+  const allowOrderProcessing = Boolean(idempotencyKey)
   const cycle = resolved.cycle
   const packId = resolved.pack
   console.info("Creem webhook received", {
@@ -440,6 +427,9 @@ export async function POST(req: Request) {
     cycle: cycle || null,
     packId: packId || null,
   })
+  if (!allowOrderProcessing) {
+    console.warn("Skipping billing/grant processing without order_id", { eventId, userId, eventType })
+  }
 
   const canceledStatuses = ["canceled", "cancelled"]
   const isCanceledEvent = eventType.includes("cancel")
@@ -477,7 +467,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to update user." }, { status: 500 })
   }
 
-  if (shouldGrant) {
+  if (shouldGrant && allowOrderProcessing) {
     const now = new Date()
     if (packId && PACK_CREDITS[packId]) {
       const credits = PACK_CREDITS[packId]
@@ -537,7 +527,7 @@ export async function POST(req: Request) {
     }
   }
 
-  if (billingRecord) {
+  if (billingRecord && allowOrderProcessing) {
     const { error: billingError } = await admin.from("billing_records").upsert(
       {
         user_id: userId,

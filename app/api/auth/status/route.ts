@@ -37,6 +37,7 @@ export async function GET() {
 
   let isProMember = hasProPlan || hasProFlag
   let creditsValue: number | null = null
+  let profileCredits: number | null = null
   let hasCreditPack = false
   let subscriptions: Array<{
     id: string
@@ -76,7 +77,7 @@ export async function GET() {
       const profileActive = `${profile.subscription_status ?? ""}`.toLowerCase() === "active"
       isProMember =
         Boolean(profile.is_pro) || profileActive || ["pro", "team", "enterprise", "studio", "vip"].includes(profilePlan)
-      const profileCredits = Number(
+      const resolvedProfileCredits = Number(
         profile.credits ??
           profile.credit_balance ??
           profile.balance ??
@@ -84,8 +85,9 @@ export async function GET() {
           profile.remaining_credits ??
           profile.available_credits
       )
-      if (!Number.isNaN(profileCredits)) {
-        creditsValue = profileCredits
+      if (!Number.isNaN(resolvedProfileCredits)) {
+        profileCredits = resolvedProfileCredits
+        creditsValue = resolvedProfileCredits
       }
     }
   }
@@ -147,8 +149,9 @@ export async function GET() {
     })
     hasCreditPack = packCredits > 0
     const totalCredits = subscriptionCredits + packCredits
+    const legacyCredits = typeof profileCredits === "number" && Number.isFinite(profileCredits) ? profileCredits : 0
     if (grants.length > 0) {
-      creditsValue = totalCredits
+      creditsValue = totalCredits + legacyCredits
     } else if (creditsValue === null && totalCredits > 0) {
       creditsValue = totalCredits
     }

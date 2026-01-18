@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -82,6 +82,7 @@ type HistoryRecord = {
   credits_per_image?: number | null
   credits_total?: number | null
   image_count?: number | null
+  share_map?: Record<string, string> | null
 }
 
 type HistoryImage = {
@@ -96,6 +97,7 @@ type HistoryImage = {
   aspectRatio?: string | null
   outputFormat?: string | null
   creditsPerImage?: number | null
+  shareId?: string | null
 }
 
 const modelLabels: Record<string, string> = {
@@ -183,6 +185,7 @@ export function HistoryClient() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [shareLoading, setShareLoading] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const shareCacheRef = useRef<Record<string, string>>({})
   const [promptOpen, setPromptOpen] = useState(false)
   const [promptCopied, setPromptCopied] = useState(false)
   const { t } = useI18n()
@@ -212,8 +215,20 @@ export function HistoryClient() {
   }, [search, typeFilter, dateFilter])
 
   useEffect(() => {
+    const cacheKey = selectedImage ? `${selectedImage.recordId}:${selectedImage.url}` : null
+    if (cacheKey && shareCacheRef.current[cacheKey]) {
+      setShareUrl(shareCacheRef.current[cacheKey])
+      return
+    }
+    if (cacheKey && selectedImage?.shareId) {
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+      const shareLink = `${origin.replace(/\/$/, "")}/share/${selectedImage.shareId}`
+      shareCacheRef.current[cacheKey] = shareLink
+      setShareUrl(shareLink)
+      return
+    }
     setShareUrl(null)
-  }, [selectedImage?.id, selectedImage?.url])
+  }, [selectedImage?.id, selectedImage?.recordId, selectedImage?.shareId, selectedImage?.url])
 
   useEffect(() => {
     let isMounted = true
@@ -283,6 +298,7 @@ export function HistoryClient() {
   const flattened = useMemo<HistoryImage[]>(() => {
     return items.flatMap((item) => {
       const urls = Array.isArray(item.image_urls) ? item.image_urls : []
+      const shareMap = item.share_map ?? {}
       return urls.map((url, index) => ({
         id: `${item.id}-${index}`,
         url,
@@ -295,6 +311,7 @@ export function HistoryClient() {
         aspectRatio: item.aspect_ratio,
         outputFormat: item.output_format,
         creditsPerImage: item.credits_per_image ?? null,
+        shareId: shareMap[url] ?? null,
       }))
     })
   }, [items])
@@ -377,6 +394,19 @@ export function HistoryClient() {
     if (!selectedImage) {
       return null
     }
+    const cacheKey = `${selectedImage.recordId}:${selectedImage.url}`
+    const cached = shareCacheRef.current[cacheKey]
+    if (cached) {
+      setShareUrl(cached)
+      return cached
+    }
+    if (selectedImage.shareId) {
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+      const shareLink = `${origin.replace(/\/$/, "")}/share/${selectedImage.shareId}`
+      shareCacheRef.current[cacheKey] = shareLink
+      setShareUrl(shareLink)
+      return shareLink
+    }
     setShareLoading(true)
     try {
       const res = await fetch("/api/share", {
@@ -390,6 +420,7 @@ export function HistoryClient() {
       }
       const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
       const shareLink = `${origin.replace(/\/$/, "")}/share/${data.shareId}`
+      shareCacheRef.current[cacheKey] = shareLink
       setShareUrl(shareLink)
       return shareLink
     } catch (err) {

@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { cache } from "react"
 import { Logo } from "@/components/logo"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -11,7 +12,11 @@ type SharePageProps = {
   params: Promise<{ id: string }>
 }
 
-async function fetchShare(id: string) {
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+export const fetchCache = "force-no-store"
+
+const fetchShare = cache(async (id: string) => {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from("share_links")
@@ -24,7 +29,7 @@ async function fetchShare(id: string) {
   }
 
   return data as ShareRecord
-}
+})
 
 export async function generateMetadata({ params }: SharePageProps): Promise<Metadata> {
   const { id } = await params
@@ -71,7 +76,7 @@ export default async function SharePage({ params }: SharePageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-background" suppressHydrationWarning>
+    <main className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <a href="/" className="flex items-center gap-2 text-lg font-semibold text-foreground">

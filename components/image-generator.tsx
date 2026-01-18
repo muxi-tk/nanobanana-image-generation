@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
@@ -290,10 +290,6 @@ export function ImageGenerator() {
       : selectedModel === "nano-banana-pro"
         ? 14
         : Math.max(0, Math.min(14, 15 - safeImageCount))
-  useEffect(() => {
-    setShareUrl(null)
-  }, [generatedImageUrl, historyId])
-
   const shareLinks = useMemo(() => {
     if (!shareUrl) {
       return null
@@ -307,7 +303,7 @@ export function ImageGenerator() {
     }
   }, [copy.shareText, shareUrl])
 
-  const ensureShareUrl = async () => {
+  const ensureShareUrl = useCallback(async () => {
     if (shareUrl) {
       return shareUrl
     }
@@ -335,7 +331,14 @@ export function ImageGenerator() {
     } finally {
       setShareLoading(false)
     }
-  }
+  }, [generatedImageUrl, historyId, shareUrl])
+
+  useEffect(() => {
+    if (!generatedImageUrl || !historyId || shareUrl) {
+      return
+    }
+    void ensureShareUrl()
+  }, [ensureShareUrl, generatedImageUrl, historyId, shareUrl])
 
   const handleShareClick = async (platform: "x" | "facebook" | "linkedin") => {
     if (!generatedImageUrl) {
@@ -648,7 +651,13 @@ export function ImageGenerator() {
         signal: controller.signal,
       }).finally(() => window.clearTimeout(timeout))
       const data = (await res.json().catch(() => null)) as
-        | { imageUrl?: string; imageUrls?: string[]; error?: string; historyId?: string | null }
+        | {
+            imageUrl?: string
+            imageUrls?: string[]
+            error?: string
+            historyId?: string | null
+            shareId?: string | null
+          }
         | null
 
       if (res.status === 401) {
@@ -679,7 +688,13 @@ export function ImageGenerator() {
 
       setGeneratedImages(images)
       setGeneratedImageUrl(images[0])
-      setHistoryId(typeof data?.historyId === "string" ? data.historyId : null)
+      const nextHistoryId = typeof data?.historyId === "string" ? data.historyId : null
+      setHistoryId(nextHistoryId)
+      if (typeof data?.shareId === "string" && data.shareId.trim()) {
+        const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+        const nextUrl = `${origin.replace(/\/$/, "")}/share/${data.shareId}`
+        setShareUrl(nextUrl)
+      }
       setProgress(100)
       if (typeof availableCredits === "number") {
         refreshCredits(Math.max(0, availableCredits - required))

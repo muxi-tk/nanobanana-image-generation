@@ -337,6 +337,41 @@ export async function POST(request: Request) {
     }
   }
 
+  let shareId: string | null = null
+  if (historyId && imageUrl) {
+    try {
+      const { data: existingShare, error: existingShareError } = await supabase
+        .from("share_links")
+        .select("id")
+        .eq("history_id", historyId)
+        .eq("image_url", imageUrl)
+        .maybeSingle()
+
+      if (existingShareError) {
+        console.error("Failed to check existing share link", existingShareError)
+      } else if (existingShare?.id) {
+        shareId = existingShare.id
+      } else {
+        const { data: share, error: shareError } = await supabase
+          .from("share_links")
+          .insert({
+            user_id: authData.user.id,
+            history_id: historyId,
+            image_url: imageUrl,
+          })
+          .select("id")
+          .single()
+        if (shareError) {
+          console.error("Failed to create share link", shareError)
+        } else {
+          shareId = share?.id ?? null
+        }
+      }
+    } catch (error) {
+      console.error("Unexpected share link error", error)
+    }
+  }
+
   try {
     const admin = createAdminClient()
     const nowIso = new Date().toISOString()
@@ -450,5 +485,5 @@ export async function POST(request: Request) {
     console.error("Unexpected credit update error", error)
   }
 
-  return NextResponse.json({ imageUrl, imageUrls: finalImageUrls, text, historyId })
+  return NextResponse.json({ imageUrl, imageUrls: finalImageUrls, text, historyId, shareId })
 }
