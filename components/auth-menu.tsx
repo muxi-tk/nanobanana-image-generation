@@ -4,7 +4,7 @@ import { signInWithGoogle } from "@/app/actions/auth"
 import { Logo } from "@/components/logo"
 import { useI18n } from "@/components/i18n-provider"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Sparkles } from "lucide-react"
 import { useEffect, useState, type SVGProps } from "react"
 
@@ -68,6 +68,7 @@ export function AuthMenu({
         className="border border-border bg-popover text-popover-foreground shadow-2xl sm:max-w-md"
         showCloseButton
       >
+        <DialogTitle className="sr-only">{copy.title}</DialogTitle>
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="flex items-center gap-2 text-2xl font-semibold text-primary">
             <Logo className="h-7 w-7 text-primary" />
@@ -76,13 +77,11 @@ export function AuthMenu({
           <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
         </div>
 
-        <Button
-          type="button"
-          className="mx-auto mt-1 w-full max-w-xs rounded-full"
-          onClick={() => window.location.assign("/pricing")}
-        >
-          <Sparkles className="h-4 w-4 text-primary-foreground" />
-          {copy.trialCta}
+        <Button asChild className="mx-auto mt-1 w-full max-w-xs rounded-full">
+          <span aria-disabled="true" tabIndex={-1}>
+            <Sparkles className="h-4 w-4 text-primary-foreground" />
+            {copy.trialCta}
+          </span>
         </Button>
 
         <div className="mt-4 border-t border-border pt-4">
