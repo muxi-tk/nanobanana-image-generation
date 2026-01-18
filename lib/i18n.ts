@@ -131,6 +131,13 @@ export const translations = {
     planPro: "Professional",
     planTeam: "Enterprise",
     planEnterprise: "Enterprise",
+    planSubscriptionsTitle: "All subscriptions",
+    planSubscriptionsDesc: "Every plan you've subscribed to.",
+    planSubscriptionCredits: "Credits",
+    planSubscriptionExpires: "Expires",
+    planStatusActive: "Active",
+    planStatusExpired: "Expired",
+    planSubscriptionsEmpty: "No subscriptions yet.",
   },
   zh: {
     navGenerator: "生成器",
@@ -260,6 +267,13 @@ export const translations = {
     planPro: "专业",
     planTeam: "企业",
     planEnterprise: "企业",
+    planSubscriptionsTitle: "全部订阅",
+    planSubscriptionsDesc: "展示你已订阅的所有套餐。",
+    planSubscriptionCredits: "订阅积分",
+    planSubscriptionExpires: "到期时间",
+    planStatusActive: "生效中",
+    planStatusExpired: "已过期",
+    planSubscriptionsEmpty: "暂无订阅记录。",
   },
 } as const
 

@@ -347,9 +347,14 @@ export async function POST(request: Request) {
       const subscriptionGrants = grants
         .filter((grant) => grant.source === "subscription" && (!grant.expires_at || grant.expires_at > nowIso))
         .sort((a, b) => {
-          const aTime = a.expires_at ? new Date(a.expires_at).getTime() : Number.MAX_SAFE_INTEGER
-          const bTime = b.expires_at ? new Date(b.expires_at).getTime() : Number.MAX_SAFE_INTEGER
-          return aTime - bTime
+          const aCreated = new Date(a.created_at).getTime()
+          const bCreated = new Date(b.created_at).getTime()
+          if (aCreated !== bCreated) {
+            return aCreated - bCreated
+          }
+          const aExpiry = a.expires_at ? new Date(a.expires_at).getTime() : Number.MAX_SAFE_INTEGER
+          const bExpiry = b.expires_at ? new Date(b.expires_at).getTime() : Number.MAX_SAFE_INTEGER
+          return aExpiry - bExpiry
         })
       const packGrants = grants
         .filter((grant) => grant.source === "credit-pack")

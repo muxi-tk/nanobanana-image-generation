@@ -107,6 +107,8 @@ const verifySignature = (secret: string, rawBody: string, signature: string) => 
 
 const toStringValue = (value: unknown) => (typeof value === "string" ? value : "")
 
+const toStringOrNull = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null)
+
 const pickMetadata = (payload: CreemWebhookPayload) =>
   payload.data?.metadata ??
   payload.data?.object?.metadata ??
@@ -132,6 +134,16 @@ const pickEventType = (payload: CreemWebhookPayload) => {
   const event = payload.eventType ?? payload.type ?? payload.event_type ?? ""
   return toStringValue(event).toLowerCase()
 }
+
+const pickProductId = (payload: CreemWebhookPayload) =>
+  toStringOrNull(payload.data?.object?.product_id) ||
+  toStringOrNull(payload.data?.object?.product?.id) ||
+  toStringOrNull(payload.data?.object?.checkout?.product_id) ||
+  toStringOrNull(payload.data?.object?.checkout?.product?.id) ||
+  toStringOrNull(payload.object?.product_id) ||
+  toStringOrNull(payload.object?.product?.id) ||
+  toStringOrNull(payload.object?.checkout?.product_id) ||
+  toStringOrNull(payload.object?.checkout?.product?.id)
 
 const pickEventId = (payload: CreemWebhookPayload, rawBody: string) => {
   const fallback = crypto.createHash("sha256").update(rawBody).digest("hex")
@@ -184,6 +196,53 @@ const toNumberOrNull = (value: unknown) => {
   return null
 }
 
+const resolvePurchaseDetails = (payload: CreemWebhookPayload) => {
+  const metadata = pickMetadata(payload)
+  const planRaw = toStringValue(metadata.plan)
+  const cycleRaw = toStringValue(metadata.cycle)
+  const packId = toStringValue(metadata.pack)
+  if (planRaw || cycleRaw || packId) {
+    return {
+      plan: planRaw ? planRaw.toLowerCase() : "",
+      cycle: cycleRaw ? cycleRaw.toLowerCase() : "",
+      pack: packId ? packId.toLowerCase() : "",
+    }
+  }
+
+  const productId = pickProductId(payload)
+  if (!productId) {
+    return { plan: "", cycle: "", pack: "" }
+  }
+
+  const planMappings: Array<{ productId?: string; plan: string; cycle: string }> = [
+    { productId: process.env.CREEM_PRODUCT_ID_STARTER_MONTHLY, plan: "starter", cycle: "monthly" },
+    { productId: process.env.CREEM_PRODUCT_ID_STARTER_YEARLY, plan: "starter", cycle: "yearly" },
+    { productId: process.env.CREEM_PRODUCT_ID_PRO_MONTHLY, plan: "pro", cycle: "monthly" },
+    { productId: process.env.CREEM_PRODUCT_ID_PRO_YEARLY, plan: "pro", cycle: "yearly" },
+    { productId: process.env.CREEM_PRODUCT_ID_TEAM_MONTHLY, plan: "team", cycle: "monthly" },
+    { productId: process.env.CREEM_PRODUCT_ID_TEAM_YEARLY, plan: "team", cycle: "yearly" },
+  ]
+
+  const packMappings: Array<{ productId?: string; pack: string }> = [
+    { productId: process.env.CREEM_PRODUCT_ID_PACK_STARTER, pack: "starter-pack" },
+    { productId: process.env.CREEM_PRODUCT_ID_PACK_GROWTH, pack: "growth-pack" },
+    { productId: process.env.CREEM_PRODUCT_ID_PACK_PROFESSIONAL, pack: "professional-pack" },
+    { productId: process.env.CREEM_PRODUCT_ID_PACK_ENTERPRISE, pack: "enterprise-pack" },
+  ]
+
+  const planMatch = planMappings.find((item) => item.productId === productId)
+  if (planMatch) {
+    return { plan: planMatch.plan, cycle: planMatch.cycle, pack: "" }
+  }
+
+  const packMatch = packMappings.find((item) => item.productId === productId)
+  if (packMatch) {
+    return { plan: "", cycle: "", pack: packMatch.pack }
+  }
+
+  return { plan: "", cycle: "", pack: "" }
+}
+
 const buildBillingRecord = (payload: CreemWebhookPayload) => {
   const eventType = pickEventType(payload)
   const status = pickStatus(payload)
@@ -214,31 +273,34 @@ const buildBillingRecord = (payload: CreemWebhookPayload) => {
     toStringValue(order?.currency) ||
     toStringValue(transaction?.currency) ||
     toStringValue(product?.currency)
-  const metadata = pickMetadata(payload)
-  const planRaw = toStringValue(metadata.plan)
-  const cycleRaw = toStringValue(metadata.cycle)
-  const packId = toStringValue(metadata.pack)
-  const planLabel = planRaw ? planRaw.toLowerCase() : ""
-  const cycleLabel = cycleRaw ? cycleRaw.toLowerCase() : ""
-  const packKey = packId ? packId.toLowerCase() : ""
+  const resolved = resolvePurchaseDetails(payload)
+  const planLabel = resolved.plan
+  const cycleLabel = resolved.cycle
+  const packKey = resolved.pack
   const description = planLabel
     ? `Subscription ${planLabel}${cycleLabel ? ` (${cycleLabel})` : ""}`
     : packKey
       ? `Credit pack ${packKey}`
       : eventType || status || null
   const planCredits = planLabel ? PLAN_CREDITS[planLabel] : null
+  const planCycle = cycleLabel === "yearly" ? "yearly" : "monthly"
+  const cycleCredits = planCredits ? planCredits[planCycle] : null
   const credits = isSuccess
     ? packKey && PACK_CREDITS[packKey]
       ? PACK_CREDITS[packKey]
-      : planCredits
-        ? planCredits.monthly
+      : cycleCredits
+        ? cycleCredits
         : null
     : null
   const expiresAt =
     isSuccess && planLabel
       ? (() => {
           const next = new Date()
-          next.setMonth(next.getMonth() + 1)
+          if (planCycle === "yearly") {
+            next.setFullYear(next.getFullYear() + 1)
+          } else {
+            next.setMonth(next.getMonth() + 1)
+          }
           return next.toISOString()
         })()
       : null
@@ -274,6 +336,7 @@ const PLAN_CREDITS: Record<
   starter: { monthly: 200, yearly: 2400 },
   pro: { monthly: 800, yearly: 9600 },
   team: { monthly: 3600, yearly: 43200 },
+  enterprise: { monthly: 3600, yearly: 43200 },
 }
 
 const PACK_CREDITS: Record<string, number> = {
@@ -339,20 +402,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing user_id metadata." }, { status: 400 })
   }
 
-  const planRaw = toStringValue(metadata.plan)
-  const planNormalized = planRaw.toLowerCase()
+  const resolved = resolvePurchaseDetails(payload)
+  const planNormalized = resolved.plan
   const status = pickStatus(payload)
   const eventType = pickEventType(payload)
   const eventId = pickEventId(payload, rawBody)
-  const cycle = toStringValue(metadata.cycle) || "monthly"
-  const packId = toStringValue(metadata.pack)
+  const cycle = resolved.cycle
+  const packId = resolved.pack
   console.info("Creem webhook received", {
     eventType,
     status,
     eventId,
     userId,
     plan: planNormalized || null,
-    cycle,
+    cycle: cycle || null,
     packId: packId || null,
   })
 
@@ -371,12 +434,16 @@ export async function POST(req: Request) {
   }
 
   const existingMetadata = userData.user.user_metadata || {}
+  const effectivePlan = planNormalized || toStringValue(existingMetadata.plan)
+  const effectiveCycle = cycle || toStringValue(existingMetadata.cycle)
+  const effectiveStatus = status || toStringValue(existingMetadata.subscription_status)
+  const nextIsProMember = planIsPro(effectivePlan) && isActive
   const nextMetadata = {
     ...existingMetadata,
-    plan: planNormalized || existingMetadata.plan,
-    cycle: cycle || existingMetadata.cycle,
-    subscription_status: status || existingMetadata.subscription_status,
-    isProMember,
+    plan: effectivePlan || existingMetadata.plan,
+    cycle: effectiveCycle || existingMetadata.cycle,
+    subscription_status: effectiveStatus || existingMetadata.subscription_status,
+    isProMember: nextIsProMember,
   }
 
   const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
@@ -414,15 +481,20 @@ export async function POST(req: Request) {
 
     if (planNormalized && PLAN_CREDITS[planNormalized]) {
       const planCredits = PLAN_CREDITS[planNormalized]
-      const credits = planCredits.monthly
+      const grantCycle = cycle === "yearly" ? "yearly" : "monthly"
+      const credits = planCredits[grantCycle]
       const expiresAt = new Date(now)
-      expiresAt.setMonth(expiresAt.getMonth() + 1)
+      if (grantCycle === "yearly") {
+        expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+      } else {
+        expiresAt.setMonth(expiresAt.getMonth() + 1)
+      }
       const { error: planError } = await admin.from("credit_grants").upsert(
         {
           user_id: userId,
           source: "subscription",
           plan_id: planNormalized,
-          cycle,
+          cycle: grantCycle,
           credits_total: credits,
           credits_remaining: credits,
           expires_at: expiresAt.toISOString(),

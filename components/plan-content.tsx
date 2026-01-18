@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 import { useI18n } from "@/components/i18n-provider"
 import { siteConfig } from "@/lib/site"
 
@@ -12,23 +13,27 @@ type PlanSnapshot = {
   cycle?: string | null
   subscriptionStatus?: string | null
   credits?: number | null
+  subscriptions?: SubscriptionEntry[]
 }
 
 type BillingResponse = {
   portalUrl?: string | null
 }
 
-const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase()
-
-const formatStatus = (value: string | null | undefined) => {
-  if (!value) {
-    return "-"
-  }
-  return value.replace(/_/g, " ")
+type SubscriptionEntry = {
+  id: string
+  plan?: string | null
+  cycle?: string | null
+  creditsRemaining?: number | null
+  expiresAt?: string | null
+  createdAt?: string | null
+  active?: boolean
 }
 
+const normalize = (value: string | null | undefined) => (value || "").trim().toLowerCase()
+
 export function PlanContent() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [snapshot, setSnapshot] = useState<PlanSnapshot | null>(null)
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
   const supportEmail = siteConfig.supportEmail || "support@nanobananaimg.online"
@@ -73,18 +78,72 @@ export function PlanContent() {
   const planKey = normalize(snapshot?.plan)
   const cycleKey = normalize(snapshot?.cycle)
   const credits = typeof snapshot?.credits === "number" ? snapshot?.credits : 0
-  const planLabel = useMemo(() => {
-    if (!planKey) {
+  const formatStatus = (value: string | null | undefined) => {
+    const normalized = normalize(value)
+    if (!normalized) {
+      return "-"
+    }
+    if (normalized === "active") return t("planStatusActive")
+    if (normalized === "expired") return t("planStatusExpired")
+    if (normalized === "canceled" || normalized === "cancelled") return t("billingStatusCanceled")
+    if (normalized === "past_due") return t("billingStatusPastDue")
+    if (normalized === "payment_failed") return t("billingStatusPaymentFailed")
+    if (normalized === "unpaid") return t("billingStatusUnpaid")
+    return normalized.replace(/_/g, " ")
+  }
+  const resolvePlanLabel = (value: string | null | undefined) => {
+    const key = normalize(value)
+    if (!key) {
       return t("billingPlanFree")
     }
-    if (planKey === "starter") return t("planStarter")
-    if (planKey === "pro") return t("planPro")
-    if (planKey === "team") return t("planTeam")
-    if (planKey === "enterprise") return t("planEnterprise")
-    return planKey
-  }, [planKey, t])
+    if (key === "starter") return t("planStarter")
+    if (key === "pro") return t("planPro")
+    if (key === "team") return t("planTeam")
+    if (key === "enterprise") return t("planEnterprise")
+    return key
+  }
+  const planLabel = useMemo(() => resolvePlanLabel(planKey), [planKey, t])
   const cycleLabel =
     cycleKey === "yearly" ? t("planCycleYearly") : cycleKey === "monthly" ? t("planCycleMonthly") : "-"
+  const subscriptionCycleLabel = (value: string | null | undefined) => {
+    const key = normalize(value)
+    if (key === "yearly") return t("planCycleYearly")
+    if (key === "monthly") return t("planCycleMonthly")
+    return "-"
+  }
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return "-"
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) {
+      return "-"
+    }
+    const formatter = new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+    return formatter.format(parsed)
+  }
+  const planRank = (value: string | null | undefined) => {
+    const key = normalize(value)
+    if (key === "enterprise" || key === "team") return 3
+    if (key === "pro" || key === "studio" || key === "vip") return 2
+    if (key === "starter") return 1
+    return 0
+  }
+  const subscriptions = useMemo(() => {
+    const list = snapshot?.subscriptions ? [...snapshot.subscriptions] : []
+    return list.sort((a, b) => {
+      const aActive = Boolean(a.active)
+      const bActive = Boolean(b.active)
+      if (aActive !== bActive) return aActive ? -1 : 1
+      const rankDiff = planRank(b.plan) - planRank(a.plan)
+      if (rankDiff !== 0) return rankDiff
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return bTime - aTime
+    })
+  }, [snapshot?.subscriptions])
   const allowSelfManage = Boolean(portalUrl && planKey)
 
   return (
@@ -124,6 +183,41 @@ export function PlanContent() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("planCycleLabel")}</p>
               <p className="mt-1 text-sm font-medium">{cycleLabel}</p>
             </div>
+          </div>
+          <Separator />
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-semibold">{t("planSubscriptionsTitle")}</p>
+              <p className="text-xs text-muted-foreground">{t("planSubscriptionsDesc")}</p>
+            </div>
+            {subscriptions.length ? (
+              <div className="space-y-2">
+                {subscriptions.map((item, index) => (
+                  <div
+                    key={item.id || `${item.plan}-${item.cycle}-${item.createdAt ?? index}`}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/60 px-4 py-3 text-sm"
+                  >
+                    <div>
+                      <p className="font-semibold">{resolvePlanLabel(item.plan)}</p>
+                      <p className="text-xs text-muted-foreground">{subscriptionCycleLabel(item.cycle)}</p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <p>
+                        {t("planSubscriptionCredits")}: {Math.max(0, item.creditsRemaining ?? 0)}
+                      </p>
+                      <p>
+                        {t("planSubscriptionExpires")}: {formatDate(item.expiresAt)}
+                      </p>
+                      <p>
+                        {t("planStatusLabel")}: {item.active ? t("planStatusActive") : t("planStatusExpired")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t("planSubscriptionsEmpty")}</p>
+            )}
           </div>
           <div className="text-xs text-muted-foreground">
             {t("supportEmailLabel")}{" "}

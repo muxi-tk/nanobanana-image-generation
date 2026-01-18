@@ -18,11 +18,11 @@ export async function GET() {
   const meta = { ...user.app_metadata, ...user.user_metadata }
 
   const planValue = (meta.plan ?? meta.tier ?? meta.subscription ?? "") as string
-  const planNormalized = planValue.toString().toLowerCase()
+  let planNormalized = planValue.toString().toLowerCase()
   const cycleValue = (meta.cycle ?? meta.billing_cycle ?? "") as string
-  const cycleNormalized = cycleValue.toString().toLowerCase()
+  let cycleNormalized = cycleValue.toString().toLowerCase()
   const statusValue = (meta.subscription_status ?? meta.status ?? "") as string
-  const statusNormalized = statusValue.toString().toLowerCase()
+  let statusNormalized = statusValue.toString().toLowerCase()
   const hasProPlan = ["pro", "team", "enterprise", "studio", "vip"].includes(planNormalized)
 
   const hasProFlag = Boolean(
@@ -38,6 +38,31 @@ export async function GET() {
   let isProMember = hasProPlan || hasProFlag
   let creditsValue: number | null = null
   let hasCreditPack = false
+  let subscriptions: Array<{
+    id: string
+    plan: string | null
+    cycle: string | null
+    creditsRemaining: number
+    expiresAt: string | null
+    createdAt: string | null
+    active: boolean
+  }> = []
+
+  const planRank = (plan: string) => {
+    switch (plan.toLowerCase()) {
+      case "enterprise":
+      case "team":
+        return 3
+      case "pro":
+      case "studio":
+      case "vip":
+        return 2
+      case "starter":
+        return 1
+      default:
+        return 0
+    }
+  }
 
   if (!isProMember) {
     const { data: profile, error: profileError } = await supabase
@@ -65,46 +90,96 @@ export async function GET() {
     }
   }
 
-  if (creditsValue === null) {
-    const nowIso = new Date().toISOString()
-    const { data: grants, error: grantsError } = await supabase
-      .from("credit_grants")
-      .select("source, credits_remaining, expires_at")
-      .eq("user_id", user.id)
-      .gt("credits_remaining", 0)
+  const nowIso = new Date().toISOString()
+  const { data: grants, error: grantsError } = await supabase
+    .from("credit_grants")
+    .select("id, source, credits_remaining, expires_at, plan_id, cycle, created_at")
+    .eq("user_id", user.id)
 
-    if (!grantsError && Array.isArray(grants)) {
-      let subscriptionCredits = 0
-      let packCredits = 0
-      grants.forEach((grant) => {
-        if (grant.source === "subscription") {
-          if (!grant.expires_at || grant.expires_at > nowIso) {
-            subscriptionCredits += grant.credits_remaining
-          }
-        } else if (grant.source === "credit-pack") {
-          packCredits += grant.credits_remaining
+  if (!grantsError && Array.isArray(grants)) {
+    const activeSubscriptionGrants = grants.filter(
+      (grant) => grant.source === "subscription" && (!grant.expires_at || grant.expires_at > nowIso)
+    )
+    const topSubscription = activeSubscriptionGrants.reduce(
+      (best, grant) => {
+        if (!best) return grant
+        const bestPlan = typeof best.plan_id === "string" ? best.plan_id : ""
+        const grantPlan = typeof grant.plan_id === "string" ? grant.plan_id : ""
+        const bestRank = planRank(bestPlan)
+        const grantRank = planRank(grantPlan)
+        if (grantRank !== bestRank) {
+          return grantRank > bestRank ? grant : best
         }
-      })
-      hasCreditPack = packCredits > 0
-      const totalCredits = subscriptionCredits + packCredits
-      if (totalCredits > 0) {
-        creditsValue = totalCredits
-        if (subscriptionCredits > 0) {
-          isProMember = true
+        const bestExpiry = best.expires_at ? new Date(best.expires_at).getTime() : Number.MAX_SAFE_INTEGER
+        const grantExpiry = grant.expires_at ? new Date(grant.expires_at).getTime() : Number.MAX_SAFE_INTEGER
+        if (grantExpiry !== bestExpiry) {
+          return grantExpiry > bestExpiry ? grant : best
         }
+        const bestCreated = new Date(best.created_at).getTime()
+        const grantCreated = new Date(grant.created_at).getTime()
+        return grantCreated > bestCreated ? grant : best
+      },
+      null as (typeof grants)[number] | null
+    )
+
+    if (topSubscription && typeof topSubscription.plan_id === "string" && topSubscription.plan_id.trim()) {
+      planNormalized = topSubscription.plan_id.toLowerCase()
+      if (typeof topSubscription.cycle === "string" && topSubscription.cycle.trim()) {
+        cycleNormalized = topSubscription.cycle.toLowerCase()
       }
+      isProMember = planRank(planNormalized) >= 2
     }
-  }
-  if (!hasCreditPack) {
-    const { data: packGrants, error: packError } = await supabase
-      .from("credit_grants")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("source", "credit-pack")
-      .gt("credits_remaining", 0)
-      .limit(1)
-    if (!packError && Array.isArray(packGrants) && packGrants.length > 0) {
-      hasCreditPack = true
+
+    let subscriptionCredits = 0
+    let packCredits = 0
+    grants.forEach((grant) => {
+      const remaining =
+        typeof grant.credits_remaining === "number" && Number.isFinite(grant.credits_remaining)
+          ? grant.credits_remaining
+          : 0
+      if (grant.source === "subscription") {
+        if (!grant.expires_at || grant.expires_at > nowIso) {
+          subscriptionCredits += Math.max(0, remaining)
+        }
+      } else if (grant.source === "credit-pack") {
+        packCredits += Math.max(0, remaining)
+      }
+    })
+    hasCreditPack = packCredits > 0
+    const totalCredits = subscriptionCredits + packCredits
+    if (creditsValue === null && totalCredits > 0) {
+      creditsValue = totalCredits
+    }
+    if (subscriptionCredits > 0 && planRank(planNormalized) === 0) {
+      isProMember = true
+    }
+
+    subscriptions = grants
+      .filter((grant) => grant.source === "subscription")
+      .map((grant) => ({
+        id: grant.id,
+        plan: typeof grant.plan_id === "string" && grant.plan_id.trim() ? grant.plan_id.toLowerCase() : null,
+        cycle: typeof grant.cycle === "string" && grant.cycle.trim() ? grant.cycle.toLowerCase() : null,
+        creditsRemaining:
+          typeof grant.credits_remaining === "number" && Number.isFinite(grant.credits_remaining)
+            ? grant.credits_remaining
+            : 0,
+        expiresAt: grant.expires_at ?? null,
+        createdAt: grant.created_at ?? null,
+        active: !grant.expires_at || grant.expires_at > nowIso,
+      }))
+      .sort((a, b) => {
+        if (a.active !== b.active) return a.active ? -1 : 1
+        const aRank = planRank(a.plan ?? "")
+        const bRank = planRank(b.plan ?? "")
+        if (aRank !== bRank) return bRank - aRank
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return bTime - aTime
+      })
+    if (subscriptions.length) {
+      const hasActiveSubscription = subscriptions.some((subscription) => subscription.active)
+      statusNormalized = hasActiveSubscription ? "active" : "expired"
     }
   }
 
@@ -130,5 +205,6 @@ export async function GET() {
     cycle: cycleNormalized || null,
     subscriptionStatus: statusNormalized || null,
     hasCreditPack,
+    subscriptions,
   })
 }
