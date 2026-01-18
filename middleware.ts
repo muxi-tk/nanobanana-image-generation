@@ -2,6 +2,13 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
+  const { pathname, searchParams } = request.nextUrl
+  if (searchParams.has("code") && pathname !== "/auth/callback") {
+    const callbackUrl = request.nextUrl.clone()
+    callbackUrl.pathname = "/auth/callback"
+    return NextResponse.redirect(callbackUrl)
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
