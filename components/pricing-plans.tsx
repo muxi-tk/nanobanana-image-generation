@@ -104,7 +104,7 @@ const plans: Plan[] = [
     yearlyExtras: { en: ["Commercial Use License"], zh: ["商业使用许可"] },
   },
   {
-    id: "team",
+    id: "enterprise",
     name: { en: "Enterprise", zh: "企业" },
     description: { en: "For large businesses and pro studios", zh: "适合大型团队与工作室" },
     monthlyPrice: 160,
@@ -257,7 +257,8 @@ export function PricingPlans() {
 
     const pendingPlan = sessionStorage.getItem("nb_pending_plan")
     if (pendingPlan) {
-      const plan = plans.find((item) => item.id === pendingPlan)
+      const pendingKey = pendingPlan === "team" ? "enterprise" : pendingPlan
+      const plan = plans.find((item) => item.id === pendingKey)
       sessionStorage.removeItem("nb_pending_plan")
       if (plan) {
         setBillingView("yearly")

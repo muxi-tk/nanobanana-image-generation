@@ -110,6 +110,11 @@ const toStringValue = (value: unknown) => (typeof value === "string" ? value : "
 
 const toStringOrNull = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null)
 
+const normalizePlan = (value: string) => {
+  const normalized = value.trim().toLowerCase()
+  return normalized === "team" ? "enterprise" : normalized
+}
+
 const pickMetadata = (payload: CreemWebhookPayload) =>
   payload.data?.metadata ??
   payload.data?.object?.metadata ??
@@ -204,7 +209,7 @@ const resolvePurchaseDetails = (payload: CreemWebhookPayload) => {
   const packId = toStringValue(metadata.pack)
   if (planRaw || cycleRaw || packId) {
     return {
-      plan: planRaw ? planRaw.toLowerCase() : "",
+      plan: planRaw ? normalizePlan(planRaw) : "",
       cycle: cycleRaw ? cycleRaw.toLowerCase() : "",
       pack: packId ? packId.toLowerCase() : "",
     }
@@ -220,8 +225,8 @@ const resolvePurchaseDetails = (payload: CreemWebhookPayload) => {
     { productId: process.env.CREEM_PRODUCT_ID_STARTER_YEARLY, plan: "starter", cycle: "yearly" },
     { productId: process.env.CREEM_PRODUCT_ID_PRO_MONTHLY, plan: "pro", cycle: "monthly" },
     { productId: process.env.CREEM_PRODUCT_ID_PRO_YEARLY, plan: "pro", cycle: "yearly" },
-    { productId: process.env.CREEM_PRODUCT_ID_TEAM_MONTHLY, plan: "team", cycle: "monthly" },
-    { productId: process.env.CREEM_PRODUCT_ID_TEAM_YEARLY, plan: "team", cycle: "yearly" },
+    { productId: process.env.CREEM_PRODUCT_ID_ENTERPRISE_MONTHLY, plan: "enterprise", cycle: "monthly" },
+    { productId: process.env.CREEM_PRODUCT_ID_ENTERPRISE_YEARLY, plan: "enterprise", cycle: "yearly" },
   ]
 
   const packMappings: Array<{ productId?: string; pack: string }> = [

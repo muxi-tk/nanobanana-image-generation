@@ -10,9 +10,9 @@ const PLAN_ENV_KEYS: Record<string, { monthly: string; yearly: string }> = {
     monthly: "CREEM_PRODUCT_ID_PRO_MONTHLY",
     yearly: "CREEM_PRODUCT_ID_PRO_YEARLY",
   },
-  team: {
-    monthly: "CREEM_PRODUCT_ID_TEAM_MONTHLY",
-    yearly: "CREEM_PRODUCT_ID_TEAM_YEARLY",
+  enterprise: {
+    monthly: "CREEM_PRODUCT_ID_ENTERPRISE_MONTHLY",
+    yearly: "CREEM_PRODUCT_ID_ENTERPRISE_YEARLY",
   },
 }
 
@@ -20,6 +20,11 @@ type CheckoutRequest = {
   plan?: string
   email?: string
   cycle?: "monthly" | "yearly"
+}
+
+const normalizePlan = (value: string) => {
+  const normalized = value.trim().toLowerCase()
+  return normalized === "team" ? "enterprise" : normalized
 }
 
 export async function POST(req: Request) {
@@ -30,7 +35,7 @@ export async function POST(req: Request) {
     console.warn("Failed to parse checkout request body", err)
   }
 
-  const plan = typeof body?.plan === "string" ? body.plan : ""
+  const plan = typeof body?.plan === "string" ? normalizePlan(body.plan) : ""
   const email = typeof body?.email === "string" ? body.email.trim() : ""
   const cycle = body?.cycle === "yearly" ? "yearly" : "monthly"
 
