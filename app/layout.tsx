@@ -33,6 +33,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          async
+          src="https://www.googletagmanager.com/gtag/js?id=G-W6NSZNN5BM"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-W6NSZNN5BM');`,
+          }}
+        />
+      </head>
       <body className={`font-sans antialiased`}>
         {children}
       </body>
