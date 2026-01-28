@@ -18,7 +18,7 @@ export function Hero() {
           secondaryCta: "查看示例",
         }
       : {
-          pill: "New users get 10 credits to generate 10 images for free",
+          pill: "New users get 10 credits to generate 5 images for free",
           titlePrefix: "Transform Images with",
           titleEmphasis: " Simple Text",
           description:
