@@ -10,7 +10,7 @@ export function Hero() {
   const copy =
     locale === "zh"
       ? {
-          pill: "新用户注册赠送 10 积分，可免费生成 10 张图",
+          pill: "新用户注册赠送 10 积分，可免费生成 5 张图",
           titlePrefix: "用文本",
           titleEmphasis: "快速修图",
           description: "使用引导式 AI 流程实现角色一致性、场景修改与高效迭代。",
